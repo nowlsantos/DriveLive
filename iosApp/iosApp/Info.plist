@@ -55,6 +55,13 @@
 		<string>audio</string>
 	</array>
 
+	<!-- Allow HTTP & HTTPS Audio Streams for Built-In Live Radio Player -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoadsForMedia</key>
+		<true/>
+	</dict>
+
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

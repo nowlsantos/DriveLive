@@ -13,7 +13,8 @@ object KaiAgentConfig {
         Speak in a composed, articulate, and subtly witty tone—concise and direct, keeping responses to 1–3 short spoken sentences so the driver stays focused on the road.
         If Focus Mode is enabled, drop all banter and limit every response to a single ultra-short confirmation sentence.
         You understand and respond naturally in English, Tagalog, or Taglish depending on how the driver addresses you.
-        When asked to navigate, control music or Spotify, inspect the road or dashboard via camera, check trip telemetry, check upcoming calendar events, log fuel/toll expenses, save or find a parking spot, manage an errand stop checklist, or manage voice notes, execute the corresponding tool immediately and confirm briefly.
+        When asked to play music or radio (e.g., a genre, mood, holiday music, or radio station), default to the built-in Live Radio Player via play_music (source = RADIO) so audio starts playing immediately with zero taps inside DriveLive. Only open Spotify (source = SPOTIFY) if the driver explicitly asks to open the Spotify app.
+        When asked to navigate, control music or radio, inspect the road or dashboard via camera, check trip telemetry, check upcoming calendar events, log fuel/toll expenses, save or find a parking spot, manage an errand stop checklist, or manage voice notes, execute the corresponding tool immediately and confirm briefly.
         Use Google Search grounding for real-time weather, business hours, traffic news, or current facts.
         SAFETY GUARDRAILS: Never ask the driver to read long lists (offer at most 2 options). If camera frames are blurry, dark, or obstructed, state clearly that you cannot read them safely instead of guessing. If you see a red dashboard warning light (oil, brake, temperature), advise pulling over safely. Never fabricate road conditions, routes, speed, or vehicle diagnostics.
     """
@@ -63,17 +64,17 @@ object KaiAgentConfig {
         ),
         FunctionDeclaration(
             name = "play_music",
-            description = "Open Spotify or search and play a song, artist, album, or playlist on Spotify.",
+            description = "Stream live music or radio immediately inside DriveLive with zero taps using the built-in Live Radio Player (default), or open the Spotify app only if explicitly requested.",
             parameters = SchemaObject(
                 properties = mapOf(
                     "query" to SchemaProperty(
                         type = "STRING",
-                        description = "Song title, artist name, genre, or mood (leave empty if user just asks to open Spotify)."
+                        description = "Genre, mood, holiday theme, or radio station name (e.g., 'christmas', 'jazz', 'lofi', 'opm', 'pop', 'rock', 'Wish 107.5'). Leave empty for popular music."
                     ),
-                    "media_type" to SchemaProperty(
+                    "source" to SchemaProperty(
                         type = "STRING",
-                        description = "Type of Spotify content.",
-                        enum = listOf("track", "artist", "album", "playlist")
+                        description = "Playback source: 'RADIO' for instant built-in streaming (default), or 'SPOTIFY' only when the driver explicitly asks to open Spotify.",
+                        enum = listOf("RADIO", "SPOTIFY")
                     )
                 ),
                 required = emptyList()
@@ -81,16 +82,29 @@ object KaiAgentConfig {
         ),
         FunctionDeclaration(
             name = "control_media_playback",
-            description = "Control current system music playback: play/pause, skip to next track, or go back to previous track.",
+            description = "Control current radio or system media playback: play/pause, skip to next station/track, go to previous station/track, or stop radio.",
             parameters = SchemaObject(
                 properties = mapOf(
                     "action" to SchemaProperty(
                         type = "STRING",
                         description = "Media playback action to execute.",
-                        enum = listOf("PLAY_PAUSE", "NEXT", "PREVIOUS")
+                        enum = listOf("PLAY_PAUSE", "NEXT", "PREVIOUS", "STOP")
                     )
                 ),
                 required = listOf("action")
+            )
+        ),
+        FunctionDeclaration(
+            name = "set_radio_volume",
+            description = "Adjust the built-in live radio volume percentage (5 to 100).",
+            parameters = SchemaObject(
+                properties = mapOf(
+                    "percent" to SchemaProperty(
+                        type = "INTEGER",
+                        description = "Target radio volume percentage between 5 and 100 (default 65)."
+                    )
+                ),
+                required = listOf("percent")
             )
         ),
         FunctionDeclaration(

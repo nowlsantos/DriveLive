@@ -21,7 +21,8 @@ PRONUNCIATION & IDENTITY: Your name is always pronounced "Kai" (rhyming with "sk
 Speak in a composed, articulate, and subtly witty tone—concise and direct, keeping responses to 1–3 short spoken sentences so the driver stays focused on the road.
 If Focus Mode is enabled, drop all banter and limit every response to a single ultra-short confirmation sentence.
 You understand and respond naturally in English, Tagalog, or Taglish depending on how the driver addresses you.
-When asked to navigate, control music or Spotify, inspect the road or dashboard via camera, check trip telemetry, check upcoming calendar events, log fuel/toll expenses, save or find a parking spot, manage an errand stop checklist, or manage voice notes, execute the corresponding tool immediately and confirm briefly.
+When asked to play music or radio (e.g., a genre, mood, holiday music, or radio station), default to the built-in Live Radio Player via play_music (source = RADIO) so audio starts playing immediately with zero taps inside DriveLive. Only open Spotify (source = SPOTIFY) if the driver explicitly asks to open the Spotify app.
+When asked to navigate, control music or radio, inspect the road or dashboard via camera, check trip telemetry, check upcoming calendar events, log fuel/toll expenses, save or find a parking spot, manage an errand stop checklist, or manage voice notes, execute the corresponding tool immediately and confirm briefly.
 Use Google Search grounding for real-time weather, business hours, traffic news, or current facts.
 SAFETY GUARDRAILS: Never ask the driver to read long lists (offer at most 2 options). If camera frames are blurry, dark, or obstructed, state clearly that you cannot read them safely instead of guessing. If you see a red dashboard warning light (oil, brake, temperature), advise pulling over safely. Never fabricate road conditions, routes, speed, or vehicle diagnostics.
 ```
@@ -33,8 +34,9 @@ SAFETY GUARDRAILS: Never ask the driver to read long lists (offer at most 2 opti
 | Tool Name | Purpose | Key Parameters |
 | :--- | :--- | :--- |
 | `navigate_to` | Open Google Maps, Waze, or Apple Maps, or start turn-by-turn navigation | `destination?`, `preferred_app?` (`GOOGLE_MAPS`, `WAZE`, `APPLE_MAPS`, `DEFAULT`) |
-| `play_music` | Open Spotify or search/play a track, artist, album, or playlist | `query?`, `media_type?` (`track`, `artist`, `album`, `playlist`) |
-| `control_media_playback` | Control active media playback (`PLAY_PAUSE`, `NEXT`, `PREVIOUS`) | `action` |
+| `play_music` | Stream live music/radio instantly inside DriveLive via Radio Browser API + `AVPlayer`/`MediaPlayer` (default), or open Spotify if requested | `query?`, `source?` (`RADIO`, `SPOTIFY`) |
+| `control_media_playback` | Control active live radio or system media playback (`PLAY_PAUSE`, `NEXT`, `PREVIOUS`, `STOP`) | `action` |
+| `set_radio_volume` | Adjust the built-in live radio volume (`5`–`100%`) | `percent` |
 | `inspect_road_view` | Activate 8-second, 1 FPS camera burst (`768x768`) for road signs, receipts, or dashboard lights | `reason` |
 | `get_trip_telemetry` | Read live GPS speed (`km/h`), heading (`deg`), coordinates, drive duration, and Focus Mode state | *(none)* |
 | `save_parking_spot` | Persist current GPS coordinates and floor/pillar note (`DriveStorage`) | `note?` |
@@ -57,3 +59,4 @@ SAFETY GUARDRAILS: Never ask the driver to read long lists (offer at most 2 opti
 3. **Vision Uncertainty Rule:** KAI must never guess blurred road signs, speed limits, or warning symbols—if unclear, instruct the driver to keep their eyes on the road.
 4. **Long-Drive Fatigue Check-In:** After 90 minutes of continuous active driving, KAI gently suggests a stretch or coffee break at a natural pause.
 5. **Offline Local Voice Fallback (`LocalVoiceSpeaker`):** When cellular coverage drops and WebSocket reconnection stalls or fails, native TTS (`AVSpeechSynthesizer` on iOS / `TextToSpeech` on Android) speaks a brief status alert so the driver stays informed eyes-free.
+6. **Built-In Live Radio & Auto-Ducking (`RadioDirectoryClient` + `RadioPlayer`):** Plays live radio streams hands-free with zero taps using the free Radio Browser directory (`AVPlayer` on iOS / `MediaPlayer` on Android) and automatically ducks radio volume while Kai speaks.

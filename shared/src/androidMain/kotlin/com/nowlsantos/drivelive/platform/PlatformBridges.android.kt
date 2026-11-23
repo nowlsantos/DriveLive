@@ -17,6 +17,7 @@ import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.AudioTrack
+import android.media.MediaPlayer
 import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.NoiseSuppressor
@@ -46,7 +47,10 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.coroutines.resume
 import java.io.ByteArrayOutputStream
 import java.lang.ref.WeakReference
 import java.text.SimpleDateFormat
@@ -471,6 +475,7 @@ actual class MediaLauncher(private val context: Context) {
             MediaControlAction.PLAY_PAUSE -> KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
             MediaControlAction.NEXT -> KeyEvent.KEYCODE_MEDIA_NEXT
             MediaControlAction.PREVIOUS -> KeyEvent.KEYCODE_MEDIA_PREVIOUS
+            MediaControlAction.STOP -> KeyEvent.KEYCODE_MEDIA_STOP
         }
         return try {
             val eventTime = SystemClock.uptimeMillis()
@@ -492,6 +497,127 @@ actual class MediaLauncher(private val context: Context) {
         } catch (e: Exception) {
             LaunchResult.Failure(e.message ?: "Spotify is not installed")
         }
+    }
+}
+
+actual class RadioPlayer {
+    private var mediaPlayer: MediaPlayer? = null
+    private var stationName: String? = null
+    private var playingState = false
+    private var userVolume: Float = 0.65f
+    private var isDucked: Boolean = false
+
+    actual suspend fun playStream(url: String, stationName: String): LaunchResult =
+        withContext(Dispatchers.Main) {
+            stopInternal()
+            val result = withTimeoutOrNull(8000.milliseconds) {
+                suspendCancellableCoroutine<LaunchResult> { continuation ->
+                    val player = MediaPlayer()
+                    try {
+                        player.setAudioAttributes(
+                            AudioAttributes.Builder()
+                                .setUsage(AudioAttributes.USAGE_MEDIA)
+                                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                                .build()
+                        )
+                        player.setDataSource(url)
+                        player.setOnPreparedListener { mp ->
+                            this@RadioPlayer.mediaPlayer = mp
+                            this@RadioPlayer.stationName = stationName
+                            this@RadioPlayer.playingState = true
+                            applyEffectiveVolume(mp)
+                            mp.start()
+                            if (continuation.isActive) {
+                                continuation.resume(LaunchResult.Success)
+                            }
+                        }
+                        player.setOnErrorListener { mp, what, extra ->
+                            runCatching { mp.release() }
+                            if (this@RadioPlayer.mediaPlayer === mp) {
+                                this@RadioPlayer.mediaPlayer = null
+                                this@RadioPlayer.playingState = false
+                            }
+                            if (continuation.isActive) {
+                                continuation.resume(
+                                    LaunchResult.Failure("Stream error ($what/$extra)")
+                                )
+                            }
+                            true
+                        }
+                        continuation.invokeOnCancellation {
+                            runCatching { player.release() }
+                        }
+                        player.prepareAsync()
+                    } catch (e: Exception) {
+                        runCatching { player.release() }
+                        if (continuation.isActive) {
+                            continuation.resume(
+                                LaunchResult.Failure(e.message ?: "Failed to load radio stream")
+                            )
+                        }
+                    }
+                }
+            }
+            result ?: run {
+                stopInternal()
+                LaunchResult.Failure("Timed out connecting to $stationName")
+            }
+        }
+
+    actual fun pause() {
+        playingState = false
+        runCatching {
+            if (mediaPlayer?.isPlaying == true) {
+                mediaPlayer?.pause()
+            }
+        }
+    }
+
+    actual fun resume(): Boolean {
+        val mp = mediaPlayer ?: return false
+        if (stationName == null) return false
+        return runCatching {
+            applyEffectiveVolume(mp)
+            mp.start()
+            playingState = true
+            true
+        }.getOrDefault(false)
+    }
+
+    actual fun stop() {
+        stopInternal()
+    }
+
+    actual fun setVolume(volume: Float) {
+        userVolume = volume.coerceIn(0.05f, 1.0f)
+        mediaPlayer?.let { applyEffectiveVolume(it) }
+    }
+
+    actual fun setDucked(ducked: Boolean) {
+        if (isDucked == ducked) return
+        isDucked = ducked
+        mediaPlayer?.let { applyEffectiveVolume(it) }
+    }
+
+    actual fun isPlaying(): Boolean = playingState && (runCatching { mediaPlayer?.isPlaying == true }.getOrDefault(false))
+
+    actual fun currentStationName(): String? = stationName
+
+    private fun applyEffectiveVolume(mp: MediaPlayer) {
+        val effective = if (isDucked) (userVolume * 0.25f) else userVolume
+        runCatching { mp.setVolume(effective, effective) }
+    }
+
+    private fun stopInternal() {
+        playingState = false
+        stationName = null
+        mediaPlayer?.let { mp ->
+            runCatching {
+                if (mp.isPlaying) mp.stop()
+                mp.release()
+            }
+        }
+        mediaPlayer = null
     }
 }
 

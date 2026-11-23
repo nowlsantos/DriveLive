@@ -1,5 +1,7 @@
 package com.nowlsantos.drivelive.agent
 
+import com.nowlsantos.drivelive.network.RadioDirectoryClient
+import com.nowlsantos.drivelive.network.RadioStation
 import com.nowlsantos.drivelive.platform.CalendarProvider
 import com.nowlsantos.drivelive.platform.DriveStorage
 import com.nowlsantos.drivelive.platform.GeoCoordinate
@@ -9,6 +11,7 @@ import com.nowlsantos.drivelive.platform.MediaControlAction
 import com.nowlsantos.drivelive.platform.MediaLauncher
 import com.nowlsantos.drivelive.platform.NavigationApp
 import com.nowlsantos.drivelive.platform.NavigationLauncher
+import com.nowlsantos.drivelive.platform.RadioPlayer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -40,15 +43,20 @@ private data class ErrandStop(
 class ToolCallDispatcher(
     private val navigationLauncher: NavigationLauncher,
     private val mediaLauncher: MediaLauncher,
+    private val radioDirectoryClient: RadioDirectoryClient,
+    private val radioPlayer: RadioPlayer,
     private val locationProvider: LocationProvider,
     private val calendarProvider: CalendarProvider,
     private val driveStorage: DriveStorage,
     private val getSessionElapsedMinutes: () -> Long,
     private val isFocusModeEnabled: () -> Boolean,
     private val onSetFocusMode: (Boolean) -> Unit,
+    private val onRadioStateChanged: (stationName: String?, isPlaying: Boolean) -> Unit,
     private val onRequestCameraBurst: (reason: String, durationSeconds: Int) -> Unit
 ) {
     private val json = Json { ignoreUnknownKeys = true }
+    private var cachedStations: List<RadioStation> = emptyList()
+    private var currentStationIndex: Int = -1
 
     suspend fun dispatch(toolName: String, argsJson: String): JsonObject {
         val args = runCatching { json.parseToJsonElement(argsJson).jsonObject }
@@ -58,6 +66,7 @@ class ToolCallDispatcher(
             "navigate_to" -> handleNavigateTo(args)
             "play_music" -> handlePlayMusic(args)
             "control_media_playback" -> handleMediaControl(args)
+            "set_radio_volume" -> handleSetRadioVolume(args)
             "inspect_road_view" -> handleInspectRoadView(args)
             "get_trip_telemetry" -> handleTripTelemetry()
             "save_parking_spot" -> handleSaveParkingSpot(args)
@@ -105,20 +114,60 @@ class ToolCallDispatcher(
 
     private suspend fun handlePlayMusic(args: JsonObject): JsonObject {
         val query = args["query"]?.jsonPrimitive?.content?.trim().orEmpty()
-        val result = if (query.isBlank() || query.equals("spotify", ignoreCase = true)) {
-            mediaLauncher.openSpotifyUri("spotify://")
-        } else {
-            mediaLauncher.searchSpotifyFallback(query)
+        val source = args["source"]?.jsonPrimitive?.content?.uppercase() ?: "RADIO"
+
+        if (source == "SPOTIFY" || query.equals("spotify", ignoreCase = true)) {
+            val result = if (query.isBlank() || query.equals("spotify", ignoreCase = true)) {
+                mediaLauncher.openSpotifyUri("spotify://")
+            } else {
+                mediaLauncher.searchSpotifyFallback(query)
+            }
+            return when (result) {
+                is LaunchResult.Success -> buildJsonObject {
+                    put("status", "launched_spotify")
+                    put("query", query.ifEmpty { "home" })
+                }
+                is LaunchResult.Failure -> buildJsonObject {
+                    put("status", "error")
+                    put("message", result.reason)
+                }
+            }
         }
-        return when (result) {
-            is LaunchResult.Success -> buildJsonObject {
-                put("status", "launched_spotify")
-                put("query", query.ifEmpty { "home" })
+
+        val stations = radioDirectoryClient.searchStations(query, limit = 10)
+        if (stations.isEmpty()) {
+            return buildJsonObject {
+                put("status", "not_found")
+                put("message", "No live radio stations matched '$query'. Try a broader genre like pop, jazz, rock, lofi, or christmas.")
             }
-            is LaunchResult.Failure -> buildJsonObject {
-                put("status", "error")
-                put("message", result.reason)
+        }
+
+        cachedStations = stations
+        var lastError = "Unable to connect to radio stream"
+        val attempts = minOf(stations.size, 4)
+        for (idx in 0 until attempts) {
+            val station = stations[idx]
+            when (val playResult = radioPlayer.playStream(station.streamUrl, station.name)) {
+                is LaunchResult.Success -> {
+                    currentStationIndex = idx
+                    onRadioStateChanged(station.name, true)
+                    return buildJsonObject {
+                        put("status", "playing_radio")
+                        put("station", station.name)
+                        put("country", station.country)
+                        put("tags", station.tags)
+                    }
+                }
+                is LaunchResult.Failure -> {
+                    lastError = playResult.reason
+                }
             }
+        }
+
+        onRadioStateChanged(null, false)
+        return buildJsonObject {
+            put("status", "error")
+            put("message", lastError)
         }
     }
 
@@ -126,6 +175,71 @@ class ToolCallDispatcher(
         val actionRaw = args["action"]?.jsonPrimitive?.content ?: "PLAY_PAUSE"
         val action = runCatching { MediaControlAction.valueOf(actionRaw) }
             .getOrDefault(MediaControlAction.PLAY_PAUSE)
+
+        val activeStation = radioPlayer.currentStationName()
+        if (activeStation != null) {
+            return when (action) {
+                MediaControlAction.STOP -> {
+                    radioPlayer.stop()
+                    onRadioStateChanged(null, false)
+                    buildJsonObject {
+                        put("status", "stopped_radio")
+                        put("station", activeStation)
+                    }
+                }
+                MediaControlAction.PLAY_PAUSE -> {
+                    if (radioPlayer.isPlaying()) {
+                        radioPlayer.pause()
+                        onRadioStateChanged(activeStation, false)
+                        buildJsonObject {
+                            put("status", "paused_radio")
+                            put("station", activeStation)
+                        }
+                    } else {
+                        val resumed = radioPlayer.resume()
+                        onRadioStateChanged(activeStation, resumed)
+                        buildJsonObject {
+                            put("status", if (resumed) "resumed_radio" else "error")
+                            put("station", activeStation)
+                        }
+                    }
+                }
+                MediaControlAction.NEXT, MediaControlAction.PREVIOUS -> {
+                    if (cachedStations.isEmpty()) {
+                        cachedStations = radioDirectoryClient.searchStations("", limit = 10)
+                    }
+                    if (cachedStations.isEmpty()) {
+                        return buildJsonObject {
+                            put("status", "error")
+                            put("message", "No stations available to switch to.")
+                        }
+                    }
+                    val step = if (action == MediaControlAction.NEXT) 1 else -1
+                    val total = cachedStations.size
+                    var lastError = "Failed to switch radio station"
+                    for (offset in 1..minOf(total, 3)) {
+                        val candidateIdx = ((currentStationIndex + step * offset) % total + total) % total
+                        val station = cachedStations[candidateIdx]
+                        when (val res = radioPlayer.playStream(station.streamUrl, station.name)) {
+                            is LaunchResult.Success -> {
+                                currentStationIndex = candidateIdx
+                                onRadioStateChanged(station.name, true)
+                                return buildJsonObject {
+                                    put("status", "switched_station")
+                                    put("station", station.name)
+                                    put("country", station.country)
+                                }
+                            }
+                            is LaunchResult.Failure -> lastError = res.reason
+                        }
+                    }
+                    buildJsonObject {
+                        put("status", "error")
+                        put("message", lastError)
+                    }
+                }
+            }
+        }
 
         return when (val result = mediaLauncher.controlPlayback(action)) {
             is LaunchResult.Success -> buildJsonObject {
@@ -136,6 +250,16 @@ class ToolCallDispatcher(
                 put("status", "error")
                 put("message", result.reason)
             }
+        }
+    }
+
+    private fun handleSetRadioVolume(args: JsonObject): JsonObject {
+        val percent = args["percent"]?.jsonPrimitive?.intOrNull ?: 65
+        val clamped = percent.coerceIn(5, 100)
+        radioPlayer.setVolume(clamped / 100f)
+        return buildJsonObject {
+            put("status", "ok")
+            put("volume_percent", clamped)
         }
     }
 

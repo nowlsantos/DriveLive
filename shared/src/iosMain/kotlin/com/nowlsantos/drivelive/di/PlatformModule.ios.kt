@@ -9,6 +9,7 @@ import com.nowlsantos.drivelive.platform.LocalVoiceSpeaker
 import com.nowlsantos.drivelive.platform.LocationProvider
 import com.nowlsantos.drivelive.platform.MediaLauncher
 import com.nowlsantos.drivelive.platform.NavigationLauncher
+import com.nowlsantos.drivelive.platform.RadioPlayer
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
@@ -17,6 +18,7 @@ actual val platformModule: Module = module {
     single { CameraFrameStreamer() }
     single { NavigationLauncher() }
     single { MediaLauncher() }
+    single { RadioPlayer() }
     single { LocationProvider() }
     single { DisplayController() }
     single { DriveStorage() }

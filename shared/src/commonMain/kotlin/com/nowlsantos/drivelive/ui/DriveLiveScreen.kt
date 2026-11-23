@@ -49,9 +49,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nowlsantos.drivelive.presentation.DriveLiveViewModel
+import com.nowlsantos.drivelive.presentation.RadioUiStatus
 import com.nowlsantos.drivelive.state.KaiSessionState
 import com.nowlsantos.drivelive.state.KaiShortcutBridge
-import com.nowlsantos.drivelive.presentation.DriveLiveViewModel
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.math.abs
 
@@ -70,6 +71,7 @@ fun DriveLiveScreen(
     onRequestPermissions: () -> Unit = {}
 ) {
     val state by viewModel.sessionState.collectAsState()
+    val radioStatus by viewModel.radioStatus.collectAsState()
     val pendingShortcutEngage by KaiShortcutBridge.pendingEngage.collectAsState()
 
     LaunchedEffect(hasPermissions, pendingShortcutEngage) {
@@ -91,7 +93,22 @@ fun DriveLiveScreen(
             verticalArrangement = Arrangement.SpaceBetween,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            StatusHeader(state = state)
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                StatusHeader(state = state)
+
+                if (radioStatus.stationName != null) {
+                    RadioNowPlayingBar(
+                        radioStatus = radioStatus,
+                        onTogglePlayPause = { viewModel.toggleRadioPlayPause() },
+                        onNextStation = { viewModel.nextRadioStation() },
+                        onStopRadio = { viewModel.stopRadio() }
+                    )
+                }
+            }
 
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -186,6 +203,78 @@ private fun CameraPipCard(
                 .background(OledBlack.copy(alpha = 0.65f), RoundedCornerShape(6.dp))
                 .padding(horizontal = 8.dp, vertical = 2.dp)
         )
+    }
+}
+
+@Composable
+private fun RadioNowPlayingBar(
+    radioStatus: RadioUiStatus,
+    onTogglePlayPause: () -> Unit,
+    onNextStation: () -> Unit,
+    onStopRadio: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(SurfaceDark, RoundedCornerShape(14.dp))
+            .border(1.dp, DriverCyan.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+            Text(
+                text = if (radioStatus.isPlaying) "LIVE RADIO" else "RADIO PAUSED",
+                color = if (radioStatus.isPlaying) DriverCyan else KaiAmber,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.2.sp
+            )
+            Text(
+                text = radioStatus.stationName.orEmpty(),
+                color = TextPrimary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = if (radioStatus.isPlaying) "PAUSE" else "PLAY",
+                color = DriverCyan,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xFF1B2028))
+                    .clickable { onTogglePlayPause() }
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            )
+            Text(
+                text = "NEXT",
+                color = TextPrimary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xFF1B2028))
+                    .clickable { onNextStation() }
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            )
+            Text(
+                text = "STOP",
+                color = KaiRed,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xFF1B2028))
+                    .clickable { onStopRadio() }
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            )
+        }
     }
 }
 

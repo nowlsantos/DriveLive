@@ -20,12 +20,19 @@ import platform.AVFAudio.AVAudioSession
 import platform.AVFAudio.AVAudioSessionCategoryOptionAllowBluetooth
 import platform.AVFAudio.AVAudioSessionCategoryOptionDefaultToSpeaker
 import platform.AVFAudio.AVAudioSessionCategoryPlayAndRecord
+import platform.AVFAudio.AVAudioSessionCategoryPlayback
 import platform.AVFAudio.AVAudioSessionModeVoiceChat
 import platform.AVFAudio.AVSpeechBoundary
 import platform.AVFAudio.AVSpeechSynthesizer
 import platform.AVFAudio.AVSpeechUtterance
 import platform.AVFAudio.setActive
 import platform.AVFoundation.AVCaptureVideoPreviewLayer
+import platform.AVFoundation.AVPlayer
+import platform.AVFoundation.AVPlayerItem
+import platform.AVFoundation.pause
+import platform.AVFoundation.play
+import platform.AVFoundation.replaceCurrentItemWithPlayerItem
+import platform.AVFoundation.volume
 import platform.CoreLocation.CLLocationManager
 import platform.CoreLocation.kCLLocationAccuracyBestForNavigation
 import platform.EventKit.EKAuthorizationStatusAuthorized
@@ -357,12 +364,108 @@ actual class MediaLauncher {
                     }
                     MediaControlAction.NEXT -> player.skipToNextItem()
                     MediaControlAction.PREVIOUS -> player.skipToPreviousItem()
+                    MediaControlAction.STOP -> player.pause()
                 }
                 if (continuation.isActive) {
                     continuation.resume(LaunchResult.Success)
                 }
             }
         }
+}
+
+@OptIn(ExperimentalForeignApi::class)
+actual class RadioPlayer {
+    private var player: AVPlayer? = null
+    private var stationName: String? = null
+    private var playingState = false
+    private var userVolume: Float = 0.65f
+    private var isDucked: Boolean = false
+
+    actual suspend fun playStream(url: String, stationName: String): LaunchResult =
+        suspendCancellableCoroutine { continuation ->
+            val nsUrl = NSURL.URLWithString(url)
+            if (nsUrl == null) {
+                if (continuation.isActive) {
+                    continuation.resume(LaunchResult.Failure("Invalid radio stream URL"))
+                }
+                return@suspendCancellableCoroutine
+            }
+
+            dispatch_async(dispatch_get_main_queue()) {
+                val session = AVAudioSession.sharedInstance()
+                if (session.category != AVAudioSessionCategoryPlayAndRecord) {
+                    runCatching {
+                        session.setCategory(
+                            category = AVAudioSessionCategoryPlayback,
+                            error = null
+                        )
+                        session.setActive(true, error = null)
+                    }
+                }
+
+                val item = AVPlayerItem.playerItemWithURL(nsUrl)
+                val avPlayer = player ?: AVPlayer().also { player = it }
+                avPlayer.replaceCurrentItemWithPlayerItem(item)
+                this@RadioPlayer.stationName = stationName
+                playingState = true
+                applyEffectiveVolume(avPlayer)
+                avPlayer.play()
+
+                if (continuation.isActive) {
+                    continuation.resume(LaunchResult.Success)
+                }
+            }
+        }
+
+    actual fun pause() {
+        playingState = false
+        dispatch_async(dispatch_get_main_queue()) {
+            player?.pause()
+        }
+    }
+
+    actual fun resume(): Boolean {
+        val current = player ?: return false
+        if (stationName == null) return false
+        playingState = true
+        dispatch_async(dispatch_get_main_queue()) {
+            applyEffectiveVolume(current)
+            current.play()
+        }
+        return true
+    }
+
+    actual fun stop() {
+        playingState = false
+        stationName = null
+        dispatch_async(dispatch_get_main_queue()) {
+            player?.pause()
+            player?.replaceCurrentItemWithPlayerItem(null)
+        }
+    }
+
+    actual fun setVolume(volume: Float) {
+        userVolume = volume.coerceIn(0.05f, 1.0f)
+        dispatch_async(dispatch_get_main_queue()) {
+            player?.let { applyEffectiveVolume(it) }
+        }
+    }
+
+    actual fun setDucked(ducked: Boolean) {
+        if (isDucked == ducked) return
+        isDucked = ducked
+        dispatch_async(dispatch_get_main_queue()) {
+            player?.let { applyEffectiveVolume(it) }
+        }
+    }
+
+    actual fun isPlaying(): Boolean = playingState
+
+    actual fun currentStationName(): String? = stationName
+
+    private fun applyEffectiveVolume(avPlayer: AVPlayer) {
+        avPlayer.volume = if (isDucked) (userVolume * 0.25f) else userVolume
+    }
 }
 
 @OptIn(ExperimentalForeignApi::class)

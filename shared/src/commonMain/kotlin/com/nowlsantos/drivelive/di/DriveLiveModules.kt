@@ -2,6 +2,7 @@ package com.nowlsantos.drivelive.di
 
 import com.nowlsantos.drivelive.config.BuildSecrets
 import com.nowlsantos.drivelive.network.KaiLiveClient
+import com.nowlsantos.drivelive.network.RadioDirectoryClient
 import com.nowlsantos.drivelive.presentation.DriveLiveViewModel
 import com.nowlsantos.drivelive.state.KaiStateMachine
 import io.ktor.client.HttpClient
@@ -38,6 +39,7 @@ fun commonModule(geminiApiKey: String): Module = module {
         }
     }
 
+    singleOf(::RadioDirectoryClient)
     singleOf(::KaiStateMachine)
 
     single {

@@ -19,7 +19,8 @@ enum class NavigationApp {
 enum class MediaControlAction {
     PLAY_PAUSE,
     NEXT,
-    PREVIOUS
+    PREVIOUS,
+    STOP
 }
 
 sealed interface LaunchResult {
@@ -51,6 +52,17 @@ expect class MediaLauncher {
     suspend fun openSpotifyUri(spotifyUri: String): LaunchResult
     suspend fun searchSpotifyFallback(query: String): LaunchResult
     suspend fun controlPlayback(action: MediaControlAction): LaunchResult
+}
+
+expect class RadioPlayer {
+    suspend fun playStream(url: String, stationName: String): LaunchResult
+    fun pause()
+    fun resume(): Boolean
+    fun stop()
+    fun setVolume(volume: Float)
+    fun setDucked(ducked: Boolean)
+    fun isPlaying(): Boolean
+    fun currentStationName(): String?
 }
 
 expect class LocationProvider {

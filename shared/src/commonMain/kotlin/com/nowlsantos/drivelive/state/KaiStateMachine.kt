@@ -97,8 +97,9 @@ class KaiStateMachine {
 
     private fun formatToolSummary(toolName: String): String = when (toolName) {
         "navigate_to" -> "Launching navigation..."
-        "play_music" -> "Opening Spotify..."
+        "play_music" -> "Tuning live radio..."
         "control_media_playback" -> "Controlling media playback..."
+        "set_radio_volume" -> "Adjusting radio volume..."
         "inspect_road_view" -> "Activating camera..."
         "get_trip_telemetry" -> "Reading trip telemetry..."
         "save_parking_spot" -> "Saving parking pin..."

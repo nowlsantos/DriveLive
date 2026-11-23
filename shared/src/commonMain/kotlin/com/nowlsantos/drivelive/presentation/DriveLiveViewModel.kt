@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nowlsantos.drivelive.agent.ToolCallDispatcher
 import com.nowlsantos.drivelive.network.KaiLiveClient
+import com.nowlsantos.drivelive.network.RadioDirectoryClient
 import com.nowlsantos.drivelive.platform.AudioEngine
 import com.nowlsantos.drivelive.platform.CalendarProvider
 import com.nowlsantos.drivelive.platform.CameraFrameStreamer
@@ -13,18 +14,26 @@ import com.nowlsantos.drivelive.platform.LocalVoiceSpeaker
 import com.nowlsantos.drivelive.platform.LocationProvider
 import com.nowlsantos.drivelive.platform.MediaLauncher
 import com.nowlsantos.drivelive.platform.NavigationLauncher
+import com.nowlsantos.drivelive.platform.RadioPlayer
 import com.nowlsantos.drivelive.state.KaiEvent
 import com.nowlsantos.drivelive.state.KaiSessionState
 import com.nowlsantos.drivelive.state.KaiStateMachine
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
+
+data class RadioUiStatus(
+    val stationName: String? = null,
+    val isPlaying: Boolean = false
+)
 
 class DriveLiveViewModel(
     private val stateMachine: KaiStateMachine,
@@ -33,6 +42,8 @@ class DriveLiveViewModel(
     private val cameraStreamer: CameraFrameStreamer,
     private val displayController: DisplayController,
     private val localVoiceSpeaker: LocalVoiceSpeaker,
+    private val radioPlayer: RadioPlayer,
+    radioDirectoryClient: RadioDirectoryClient,
     navigationLauncher: NavigationLauncher,
     mediaLauncher: MediaLauncher,
     locationProvider: LocationProvider,
@@ -41,6 +52,9 @@ class DriveLiveViewModel(
 ) : ViewModel() {
 
     val sessionState: StateFlow<KaiSessionState> = stateMachine.state
+
+    private val _radioStatus = MutableStateFlow(RadioUiStatus())
+    val radioStatus: StateFlow<RadioUiStatus> = _radioStatus.asStateFlow()
 
     private var eventCollectorJob: Job? = null
     private var micStreamJob: Job? = null
@@ -57,6 +71,8 @@ class DriveLiveViewModel(
     private val toolDispatcher = ToolCallDispatcher(
         navigationLauncher = navigationLauncher,
         mediaLauncher = mediaLauncher,
+        radioDirectoryClient = radioDirectoryClient,
+        radioPlayer = radioPlayer,
         locationProvider = locationProvider,
         calendarProvider = calendarProvider,
         driveStorage = driveStorage,
@@ -65,6 +81,9 @@ class DriveLiveViewModel(
         },
         isFocusModeEnabled = { focusModeEnabled },
         onSetFocusMode = { enabled -> focusModeEnabled = enabled },
+        onRadioStateChanged = { stationName, isPlaying ->
+            _radioStatus.value = RadioUiStatus(stationName = stationName, isPlaying = isPlaying)
+        },
         onRequestCameraBurst = { reason, durationSeconds ->
             startCameraBurst(reason, durationSeconds)
         }
@@ -133,6 +152,8 @@ class DriveLiveViewModel(
 
         while (audioPlaybackChannel.tryReceive().isSuccess) { }
         audioEngine.stopAll()
+        radioPlayer.stop()
+        _radioStatus.value = RadioUiStatus()
         localVoiceSpeaker.stop()
         displayController.setKeepScreenOn(false)
 
@@ -140,6 +161,24 @@ class DriveLiveViewModel(
             liveClient.disconnect()
         }
         stateMachine.onEvent(KaiEvent.StopSession)
+    }
+
+    fun toggleRadioPlayPause() {
+        viewModelScope.launch {
+            toolDispatcher.dispatch("control_media_playback", """{"action":"PLAY_PAUSE"}""")
+        }
+    }
+
+    fun nextRadioStation() {
+        viewModelScope.launch {
+            toolDispatcher.dispatch("control_media_playback", """{"action":"NEXT"}""")
+        }
+    }
+
+    fun stopRadio() {
+        viewModelScope.launch {
+            toolDispatcher.dispatch("control_media_playback", """{"action":"STOP"}""")
+        }
     }
 
     fun triggerManualCameraInspect() {
@@ -185,6 +224,7 @@ class DriveLiveViewModel(
                     }
 
                     is KaiEvent.ServerAudioChunk -> {
+                        radioPlayer.setDucked(true)
                         stateMachine.onEvent(event)
                         if (event.pcm24k.isNotEmpty()) {
                             audioPlaybackChannel.trySend(event.pcm24k)
@@ -195,6 +235,12 @@ class DriveLiveViewModel(
                         // Drain any queued playback chunks immediately on driver interruption
                         while (audioPlaybackChannel.tryReceive().isSuccess) { }
                         audioEngine.flushPlayback()
+                        radioPlayer.setDucked(false)
+                        stateMachine.onEvent(event)
+                    }
+
+                    is KaiEvent.TurnComplete -> {
+                        radioPlayer.setDucked(false)
                         stateMachine.onEvent(event)
                     }
 
