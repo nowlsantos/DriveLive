@@ -209,6 +209,24 @@ class MichaelLiveClient(
         ws.send(Frame.Text(json.encodeToString(payload)))
     }
 
+    suspend fun sendClientTurn(text: String) {
+        val ws = session ?: return
+        if (!ws.isActive) return
+
+        val payload = ClientContentMessage(
+            clientContent = ClientContentPayload(
+                turns = listOf(
+                    ContentPayload(
+                        role = "user",
+                        parts = listOf(ContentPart(text = text))
+                    )
+                ),
+                turnComplete = true
+            )
+        )
+        ws.send(Frame.Text(json.encodeToString(payload)))
+    }
+
     suspend fun sendToolResponse(callId: String, toolName: String, result: JsonObject) {
         val ws = session ?: return
         if (!ws.isActive) return

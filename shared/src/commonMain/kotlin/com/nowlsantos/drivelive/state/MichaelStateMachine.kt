@@ -98,7 +98,15 @@ class MichaelStateMachine {
     private fun formatToolSummary(toolName: String): String = when (toolName) {
         "navigate_to" -> "Launching navigation..."
         "play_music" -> "Opening Spotify..."
+        "control_media_playback" -> "Controlling media playback..."
         "inspect_road_view" -> "Activating camera..."
+        "get_trip_telemetry" -> "Reading trip telemetry..."
+        "save_parking_spot" -> "Saving parking pin..."
+        "find_my_car" -> "Locating parked vehicle..."
+        "save_voice_note" -> "Saving voice note..."
+        "recall_notes" -> "Reading saved notes..."
+        "clear_notes" -> "Clearing saved notes..."
+        "set_focus_mode" -> "Updating Focus Mode..."
         else -> "Executing $toolName..."
     }
 }

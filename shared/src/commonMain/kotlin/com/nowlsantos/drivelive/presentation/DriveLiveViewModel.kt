@@ -7,6 +7,8 @@ import com.nowlsantos.drivelive.network.MichaelLiveClient
 import com.nowlsantos.drivelive.platform.AudioEngine
 import com.nowlsantos.drivelive.platform.CameraFrameStreamer
 import com.nowlsantos.drivelive.platform.DisplayController
+import com.nowlsantos.drivelive.platform.DriveStorage
+import com.nowlsantos.drivelive.platform.LocalVoiceSpeaker
 import com.nowlsantos.drivelive.platform.LocationProvider
 import com.nowlsantos.drivelive.platform.MediaLauncher
 import com.nowlsantos.drivelive.platform.NavigationLauncher
@@ -19,6 +21,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 class DriveLiveViewModel(
     private val stateMachine: MichaelStateMachine,
@@ -26,9 +31,11 @@ class DriveLiveViewModel(
     private val audioEngine: AudioEngine,
     private val cameraStreamer: CameraFrameStreamer,
     private val displayController: DisplayController,
+    private val localVoiceSpeaker: LocalVoiceSpeaker,
     navigationLauncher: NavigationLauncher,
     mediaLauncher: MediaLauncher,
-    locationProvider: LocationProvider
+    locationProvider: LocationProvider,
+    driveStorage: DriveStorage
 ) : ViewModel() {
 
     val sessionState: StateFlow<MichaelSessionState> = stateMachine.state
@@ -37,13 +44,24 @@ class DriveLiveViewModel(
     private var micStreamJob: Job? = null
     private var cameraBurstJob: Job? = null
     private var reconnectJob: Job? = null
+    private var fatigueCheckJob: Job? = null
     private var audioPlaybackJob: Job? = null
     private val audioPlaybackChannel = Channel<ByteArray>(capacity = 128)
+
+    private var sessionStartMark: TimeMark? = null
+    private var hasGreetedThisSession = false
+    private var focusModeEnabled = false
 
     private val toolDispatcher = ToolCallDispatcher(
         navigationLauncher = navigationLauncher,
         mediaLauncher = mediaLauncher,
         locationProvider = locationProvider,
+        driveStorage = driveStorage,
+        getSessionElapsedMinutes = {
+            sessionStartMark?.elapsedNow()?.inWholeMinutes ?: 0L
+        },
+        isFocusModeEnabled = { focusModeEnabled },
+        onSetFocusMode = { enabled -> focusModeEnabled = enabled },
         onRequestCameraBurst = { reason, durationSeconds ->
             startCameraBurst(reason, durationSeconds)
         }
@@ -74,8 +92,13 @@ class DriveLiveViewModel(
     private fun startDriveSession() {
         reconnectJob?.cancel()
         reconnectJob = null
+        localVoiceSpeaker.stop()
+        sessionStartMark = TimeSource.Monotonic.markNow()
+        hasGreetedThisSession = false
+        focusModeEnabled = false
         displayController.setKeepScreenOn(true)
         stateMachine.onEvent(MichaelEvent.StartSession)
+        startFatigueTimer()
         viewModelScope.launch {
             liveClient.connect(scope = viewModelScope)
         }
@@ -85,14 +108,22 @@ class DriveLiveViewModel(
         reconnectJob?.cancel()
         reconnectJob = null
 
+        fatigueCheckJob?.cancel()
+        fatigueCheckJob = null
+
         micStreamJob?.cancel()
         micStreamJob = null
 
         cameraBurstJob?.cancel()
         cameraBurstJob = null
 
+        sessionStartMark = null
+        hasGreetedThisSession = false
+        focusModeEnabled = false
+
         while (audioPlaybackChannel.tryReceive().isSuccess) { }
         audioEngine.stopAll()
+        localVoiceSpeaker.stop()
         displayController.setKeepScreenOn(false)
 
         viewModelScope.launch {
@@ -113,6 +144,20 @@ class DriveLiveViewModel(
         stateMachine.onEvent(MichaelEvent.CameraBurstFinished)
     }
 
+    private fun startFatigueTimer() {
+        fatigueCheckJob?.cancel()
+        fatigueCheckJob = viewModelScope.launch {
+            delay(90.minutes)
+            if (sessionState.value !is MichaelSessionState.Idle &&
+                sessionState.value !is MichaelSessionState.Error
+            ) {
+                liveClient.sendClientTurn(
+                    "[SYSTEM CHECK-IN] The driver has been driving continuously for 90 minutes. Gently suggest taking a quick stretch or coffee break."
+                )
+            }
+        }
+    }
+
     private fun observeLiveEvents() {
         eventCollectorJob?.cancel()
         eventCollectorJob = viewModelScope.launch {
@@ -121,6 +166,12 @@ class DriveLiveViewModel(
                     is MichaelEvent.HandshakeComplete -> {
                         stateMachine.onEvent(event)
                         startMicrophoneStream()
+                        if (!hasGreetedThisSession) {
+                            hasGreetedThisSession = true
+                            liveClient.sendClientTurn(
+                                "[SYSTEM] Voice link established. Greet the driver briefly in 1 short sentence as KAI."
+                            )
+                        }
                     }
 
                     is MichaelEvent.ServerAudioChunk -> {
@@ -161,6 +212,7 @@ class DriveLiveViewModel(
                         if (event.recoverable) {
                             reconnectWithBackoff(null)
                         } else {
+                            localVoiceSpeaker.speak("Connection lost. Tap Engage KAI when ready to reconnect.")
                             stateMachine.onEvent(event)
                         }
                     }
@@ -207,10 +259,14 @@ class DriveLiveViewModel(
     private fun reconnectWithBackoff(resumptionHandle: String?) {
         stateMachine.onEvent(MichaelEvent.ConnectionDropped(resumptionHandle))
         val currentAttempt = (sessionState.value as? MichaelSessionState.Reconnecting)?.attempt ?: 1
+        if (currentAttempt == 2) {
+            localVoiceSpeaker.speak("Signal dropped. Attempting to reconnect.")
+        }
 
         reconnectJob?.cancel()
         reconnectJob = viewModelScope.launch {
             if (currentAttempt > 5) {
+                localVoiceSpeaker.speak("Voice link disconnected. Tap Engage KAI to retry.")
                 stateMachine.onEvent(
                     MichaelEvent.SessionFailed(
                         error = "Voice link disconnected. Please tap Engage KAI to retry.",
@@ -230,5 +286,6 @@ class DriveLiveViewModel(
         super.onCleared()
         audioPlaybackChannel.close()
         endDriveSession()
+        localVoiceSpeaker.shutdown()
     }
 }

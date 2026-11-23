@@ -19,7 +19,9 @@ import android.media.audiofx.NoiseSuppressor
 import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
+import android.speech.tts.TextToSpeech
 import android.util.Size
+import android.view.KeyEvent
 import android.view.WindowManager
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
@@ -43,6 +45,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.lang.ref.WeakReference
+import java.util.Locale
 import java.util.concurrent.Executors
 import kotlin.math.max
 import kotlin.math.sqrt
@@ -455,6 +458,24 @@ actual class MediaLauncher(private val context: Context) {
         return launchUri("spotify:search:$encoded")
     }
 
+    actual suspend fun controlPlayback(action: MediaControlAction): LaunchResult {
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            ?: return LaunchResult.Failure("AudioManager unavailable")
+        val keyCode = when (action) {
+            MediaControlAction.PLAY_PAUSE -> KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+            MediaControlAction.NEXT -> KeyEvent.KEYCODE_MEDIA_NEXT
+            MediaControlAction.PREVIOUS -> KeyEvent.KEYCODE_MEDIA_PREVIOUS
+        }
+        return try {
+            val eventTime = SystemClock.uptimeMillis()
+            audioManager.dispatchMediaKeyEvent(KeyEvent(eventTime, eventTime, KeyEvent.ACTION_DOWN, keyCode, 0))
+            audioManager.dispatchMediaKeyEvent(KeyEvent(eventTime, eventTime, KeyEvent.ACTION_UP, keyCode, 0))
+            LaunchResult.Success
+        } catch (e: Exception) {
+            LaunchResult.Failure(e.message ?: "Failed to dispatch media control")
+        }
+    }
+
     private fun launchUri(uriString: String): LaunchResult {
         return try {
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uriString)).apply {
@@ -480,7 +501,12 @@ actual class LocationProvider(private val context: Context) {
                 null
             }
             if (loc != null) {
-                return GeoCoordinate(loc.latitude, loc.longitude)
+                return GeoCoordinate(
+                    latitude = loc.latitude,
+                    longitude = loc.longitude,
+                    speedKmh = if (loc.hasSpeed()) loc.speed * 3.6f else null,
+                    bearingDegrees = if (loc.hasBearing()) loc.bearing else null
+                )
             }
         }
         return null
@@ -501,5 +527,61 @@ actual class DisplayController(activity: Activity? = null) {
         } else {
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
+    }
+}
+
+actual class DriveStorage(context: Context) {
+    private val prefs = context.applicationContext.getSharedPreferences("drivelive_kai_prefs", Context.MODE_PRIVATE)
+
+    actual fun putString(key: String, value: String) {
+        prefs.edit().putString(key, value).apply()
+    }
+
+    actual fun getString(key: String): String? = prefs.getString(key, null)
+
+    actual fun remove(key: String) {
+        prefs.edit().remove(key).apply()
+    }
+}
+
+actual class LocalVoiceSpeaker(context: Context) {
+    private val appContext = context.applicationContext
+    private var isReady = false
+    private var pendingUtterance: String? = null
+    private var tts: TextToSpeech? = null
+
+    init {
+        tts = TextToSpeech(appContext) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                tts?.language = Locale.US
+                isReady = true
+                pendingUtterance?.let { queued ->
+                    pendingUtterance = null
+                    tts?.speak(queued, TextToSpeech.QUEUE_FLUSH, null, "kai_local_tts")
+                }
+            }
+        }
+    }
+
+    actual fun speak(text: String) {
+        if (text.isBlank()) return
+        if (isReady) {
+            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "kai_local_tts")
+        } else {
+            pendingUtterance = text
+        }
+    }
+
+    actual fun stop() {
+        pendingUtterance = null
+        tts?.stop()
+    }
+
+    actual fun shutdown() {
+        pendingUtterance = null
+        tts?.stop()
+        tts?.shutdown()
+        tts = null
+        isReady = false
     }
 }

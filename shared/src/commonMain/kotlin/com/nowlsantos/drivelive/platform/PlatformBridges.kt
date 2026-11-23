@@ -4,7 +4,9 @@ import kotlinx.coroutines.flow.Flow
 
 data class GeoCoordinate(
     val latitude: Double,
-    val longitude: Double
+    val longitude: Double,
+    val speedKmh: Float? = null,
+    val bearingDegrees: Float? = null
 )
 
 enum class NavigationApp {
@@ -12,6 +14,12 @@ enum class NavigationApp {
     WAZE,
     APPLE_MAPS,
     DEFAULT
+}
+
+enum class MediaControlAction {
+    PLAY_PAUSE,
+    NEXT,
+    PREVIOUS
 }
 
 sealed interface LaunchResult {
@@ -42,6 +50,7 @@ expect class NavigationLauncher {
 expect class MediaLauncher {
     suspend fun openSpotifyUri(spotifyUri: String): LaunchResult
     suspend fun searchSpotifyFallback(query: String): LaunchResult
+    suspend fun controlPlayback(action: MediaControlAction): LaunchResult
 }
 
 expect class LocationProvider {
@@ -50,4 +59,16 @@ expect class LocationProvider {
 
 expect class DisplayController {
     fun setKeepScreenOn(enabled: Boolean)
+}
+
+expect class DriveStorage {
+    fun putString(key: String, value: String)
+    fun getString(key: String): String?
+    fun remove(key: String)
+}
+
+expect class LocalVoiceSpeaker {
+    fun speak(text: String)
+    fun stop()
+    fun shutdown()
 }

@@ -21,14 +21,20 @@ import platform.AVFAudio.AVAudioSessionCategoryOptionAllowBluetooth
 import platform.AVFAudio.AVAudioSessionCategoryOptionDefaultToSpeaker
 import platform.AVFAudio.AVAudioSessionCategoryPlayAndRecord
 import platform.AVFAudio.AVAudioSessionModeVoiceChat
+import platform.AVFAudio.AVSpeechBoundary
+import platform.AVFAudio.AVSpeechSynthesizer
+import platform.AVFAudio.AVSpeechUtterance
 import platform.AVFAudio.setActive
 import platform.AVFoundation.AVCaptureVideoPreviewLayer
 import platform.CoreLocation.CLLocationManager
 import platform.CoreLocation.kCLLocationAccuracyBestForNavigation
 import platform.Foundation.NSCharacterSet
 import platform.Foundation.NSURL
+import platform.Foundation.NSUserDefaults
 import platform.Foundation.URLQueryAllowedCharacterSet
 import platform.Foundation.stringByAddingPercentEncodingWithAllowedCharacters
+import platform.MediaPlayer.MPMusicPlaybackState
+import platform.MediaPlayer.MPMusicPlayerController
 import platform.UIKit.UIApplication
 import platform.darwin.dispatch_async
 import platform.darwin.dispatch_get_main_queue
@@ -328,6 +334,27 @@ actual class MediaLauncher {
             openSpotifyUri("spotify:search:$encoded")
         }
     }
+
+    actual suspend fun controlPlayback(action: MediaControlAction): LaunchResult =
+        suspendCancellableCoroutine { continuation ->
+            dispatch_async(dispatch_get_main_queue()) {
+                val player = MPMusicPlayerController.systemMusicPlayer
+                when (action) {
+                    MediaControlAction.PLAY_PAUSE -> {
+                        if (player.playbackState == MPMusicPlaybackState.MPMusicPlaybackStatePlaying) {
+                            player.pause()
+                        } else {
+                            player.play()
+                        }
+                    }
+                    MediaControlAction.NEXT -> player.skipToNextItem()
+                    MediaControlAction.PREVIOUS -> player.skipToPreviousItem()
+                }
+                if (continuation.isActive) {
+                    continuation.resume(LaunchResult.Success)
+                }
+            }
+        }
 }
 
 @OptIn(ExperimentalForeignApi::class)
@@ -346,7 +373,14 @@ actual class LocationProvider {
             lat = latitude
             lon = longitude
         }
-        return GeoCoordinate(lat, lon)
+        val speedKmh = if (loc.speed >= 0.0) (loc.speed * 3.6).toFloat() else null
+        val bearing = if (loc.course >= 0.0) loc.course.toFloat() else null
+        return GeoCoordinate(
+            latitude = lat,
+            longitude = lon,
+            speedKmh = speedKmh,
+            bearingDegrees = bearing
+        )
     }
 }
 
@@ -355,6 +389,47 @@ actual class DisplayController {
         dispatch_async(dispatch_get_main_queue()) {
             UIApplication.sharedApplication.idleTimerDisabled = enabled
         }
+    }
+}
+
+actual class DriveStorage {
+    private val defaults = NSUserDefaults.standardUserDefaults
+
+    actual fun putString(key: String, value: String) {
+        defaults.setObject(value, forKey = key)
+    }
+
+    actual fun getString(key: String): String? = defaults.stringForKey(key)
+
+    actual fun remove(key: String) {
+        defaults.removeObjectForKey(key)
+    }
+}
+
+actual class LocalVoiceSpeaker {
+    private val synthesizer = AVSpeechSynthesizer()
+
+    actual fun speak(text: String) {
+        if (text.isBlank()) return
+        dispatch_async(dispatch_get_main_queue()) {
+            if (synthesizer.isSpeaking()) {
+                synthesizer.stopSpeakingAtBoundary(AVSpeechBoundary.AVSpeechBoundaryImmediate)
+            }
+            val utterance = AVSpeechUtterance.speechUtteranceWithString(text)
+            synthesizer.speakUtterance(utterance)
+        }
+    }
+
+    actual fun stop() {
+        dispatch_async(dispatch_get_main_queue()) {
+            if (synthesizer.isSpeaking()) {
+                synthesizer.stopSpeakingAtBoundary(AVSpeechBoundary.AVSpeechBoundaryImmediate)
+            }
+        }
+    }
+
+    actual fun shutdown() {
+        stop()
     }
 }
 

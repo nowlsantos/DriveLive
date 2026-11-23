@@ -70,7 +70,10 @@ data class SlidingWindowConfig(val targetTokens: Int = 16000)
 data class SessionResumptionConfig(val handle: String? = null)
 
 @Serializable
-data class ToolDeclaration(val functionDeclarations: List<FunctionDeclaration>)
+data class ToolDeclaration(
+    val functionDeclarations: List<FunctionDeclaration>? = null,
+    val googleSearch: JsonObject? = null
+)
 
 @Serializable
 data class FunctionDeclaration(
@@ -96,6 +99,15 @@ data class SchemaProperty(
 
 @Serializable
 data class ClientRealtimeInputMessage(val realtimeInput: RealtimeInputPayload)
+
+@Serializable
+data class ClientContentMessage(val clientContent: ClientContentPayload)
+
+@Serializable
+data class ClientContentPayload(
+    val turns: List<ContentPayload>,
+    val turnComplete: Boolean = true
+)
 
 @Serializable
 data class RealtimeInputPayload(
