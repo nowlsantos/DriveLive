@@ -4,6 +4,10 @@ import Shared
 
 @main
 struct iOSApp: App {
+    init() {
+        IosCameraBridge.shared.registerHandler(handler: IosCameraController.shared)
+    }
+
     var body: some Scene {
         WindowGroup {
             DriveLiveComposeContainer()

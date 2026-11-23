@@ -6,11 +6,13 @@ import kotlinx.cinterop.get
 import kotlinx.cinterop.useContents
 import kotlinx.cinterop.usePinned
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
+import kotlin.time.Duration.Companion.milliseconds
 import platform.AVFAudio.AVAudioEngine
 import platform.AVFAudio.AVAudioFormat
 import platform.AVFAudio.AVAudioPCMBuffer
@@ -42,6 +44,7 @@ import platform.EventKit.EKEntityType
 import platform.EventKit.EKEvent
 import platform.EventKit.EKEventStore
 import platform.Foundation.NSCharacterSet
+import platform.Foundation.NSData
 import platform.Foundation.NSDate
 import platform.Foundation.NSDateFormatter
 import platform.Foundation.NSURL
@@ -242,19 +245,83 @@ actual class AudioEngine actual constructor() {
     }
 }
 
+interface IosCameraFrameSink {
+    fun onJpegFrame(data: NSData)
+}
+
+interface IosCameraHandler {
+    fun attachPreviewLayer(previewLayer: AVCaptureVideoPreviewLayer?)
+    fun startStream(previewLayer: AVCaptureVideoPreviewLayer?, sink: IosCameraFrameSink)
+    fun stopStream()
+}
+
+object IosCameraBridge {
+    private var handler: IosCameraHandler? = null
+
+    fun registerHandler(handler: IosCameraHandler) {
+        this.handler = handler
+    }
+
+    internal fun getHandler(): IosCameraHandler? = handler
+}
+
 actual class CameraFrameStreamer {
     private var previewLayerRef: AVCaptureVideoPreviewLayer? = null
 
     fun attachPreviewLayer(previewLayer: AVCaptureVideoPreviewLayer) {
         previewLayerRef = previewLayer
+        IosCameraBridge.getHandler()?.attachPreviewLayer(previewLayer)
     }
 
     fun detachPreviewLayer() {
         previewLayerRef = null
+        IosCameraBridge.getHandler()?.attachPreviewLayer(null)
     }
 
-    actual fun streamFrames(durationSeconds: Int): Flow<ByteArray> = emptyFlow()
-    actual fun stop() = Unit
+    actual fun streamFrames(durationSeconds: Int): Flow<ByteArray> = callbackFlow {
+        val handler = IosCameraBridge.getHandler()
+        if (handler == null) {
+            close()
+            return@callbackFlow
+        }
+
+        val sink = object : IosCameraFrameSink {
+            override fun onJpegFrame(data: NSData) {
+                val bytes = data.toByteArray()
+                if (bytes.isNotEmpty()) {
+                    trySend(bytes)
+                }
+            }
+        }
+
+        val timeoutJob = launch {
+            delay((durationSeconds * 1000L).milliseconds)
+            close()
+        }
+
+        handler.startStream(previewLayer = previewLayerRef, sink = sink)
+
+        awaitClose {
+            timeoutJob.cancel()
+            handler.stopStream()
+        }
+    }
+
+    actual fun stop() {
+        IosCameraBridge.getHandler()?.stopStream()
+    }
+}
+
+@OptIn(ExperimentalForeignApi::class)
+private fun NSData.toByteArray(): ByteArray {
+    val size = length.toInt()
+    if (size <= 0) return ByteArray(0)
+    val src = bytes ?: return ByteArray(0)
+    val result = ByteArray(size)
+    result.usePinned { pinned ->
+        memcpy(pinned.addressOf(0), src, length)
+    }
+    return result
 }
 
 actual class NavigationLauncher {
