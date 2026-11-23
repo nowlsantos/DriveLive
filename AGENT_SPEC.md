@@ -9,7 +9,7 @@
 * **Model & Endpoint:**
     * WebSocket URL: `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent`
     * Model: `models/gemini-2.5-flash-native-audio-preview-12-2025` (Gemini Live native audio & multimodal model)
-    * Prebuilt Voice: `Charon` (calm, composed, authoritative co-pilot register)
+    * Prebuilt Voice: `Orus` (firm, calm, composed, authoritative co-pilot register)
     * Grounding: Built-in `googleSearch` enabled for real-time weather, traffic news, and business hours.
 
 ---

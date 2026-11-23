@@ -32,7 +32,7 @@ object KaiAgentConfig {
                     responseModalities = listOf("AUDIO"),
                     speechConfig = SpeechConfig(
                         voiceConfig = VoiceConfig(
-                            prebuiltVoiceConfig = PrebuiltVoiceConfig(voiceName = "Charon")
+                            prebuiltVoiceConfig = PrebuiltVoiceConfig(voiceName = "Orus")
                         )
                     )
                 ),
