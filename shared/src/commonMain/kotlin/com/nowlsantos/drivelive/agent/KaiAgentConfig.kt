@@ -3,7 +3,7 @@ package com.nowlsantos.drivelive.agent
 import com.nowlsantos.drivelive.network.*
 import kotlinx.serialization.json.JsonObject
 
-object MichaelAgentConfig {
+object KaiAgentConfig {
 
     const val MODEL_ID = "models/gemini-2.5-flash-native-audio-preview-12-2025"
 

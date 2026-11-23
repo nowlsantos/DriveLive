@@ -13,7 +13,7 @@
 * **Networking & Serialization:** Ktor Client (`OkHttp` engine on Android, `Darwin` engine on iOS) with WebSockets (`BidiGenerateContent`) + `kotlinx.serialization`.
 * **Dependency Injection:** Koin Multiplatform (`koin-core`, `koin-compose`, `koin-compose-viewmodel`).
 * **Local Persistence (Phase 3):** Room Multiplatform (KMP) for voice memos, tasks, and scanned receipt logs.
-* **Architecture Pattern:** Formal Finite State Machine (`MichaelSessionState`) driving a unidirectional Compose HUD, paired with `expect/actual` platform hardware bridges.
+* **Architecture Pattern:** Formal Finite State Machine (`KaiSessionState`) driving a unidirectional Compose HUD, paired with `expect/actual` platform hardware bridges.
 
 ## 3. Core Functional & Hardware Constraints
 1. **Audio-First Loop with Hardware AEC:**
@@ -28,7 +28,7 @@
 4. **Glanceable Car UX Rules:**
     * Minimum interactive touch target: `72.dp`.
     * Maximum 3 primary interactive controls on screen while driving.
-    * High-contrast OLED black (`#050505`) background with Knight Rider-inspired segmented LED voice amplitude visualizer synced to Michael's speech.
+    * High-contrast OLED black (`#050505`) background with Knight Rider-inspired segmented LED voice amplitude visualizer synced to KAI's speech.
 
 ## 4. Platform Bridge Contracts (`commonMain` `expect` / `actual`)
 * **`AudioEngine`**: Captures `16kHz` PCM mic stream + amplitude; plays `24kHz` PCM audio; flushes buffer on barge-in.
@@ -40,7 +40,7 @@
 
 ## 5. Phased Delivery Roadmap
 * **Phase 0 (Current):** Android Studio KMP project initialization + `PROJECT_SPEC.md` and `AGENT_SPEC.md` committed to repo root.
-* **Phase 1 (Core Voice Loop):** Gradle dependencies, `MichaelSessionState` FSM, `MichaelLiveClient` Ktor WebSocket client, Android `AudioEngine` (AEC), and DriveLive Car HUD.
+* **Phase 1 (Core Voice Loop):** Gradle dependencies, `KaiSessionState` FSM, `KaiLiveClient` Ktor WebSocket client, Android `AudioEngine` (AEC), and DriveLive Car HUD.
 * **Phase 2 (Tools & Vision):** Non-blocking tool dispatcher, `NavigationLauncher` (Google Maps & Waze), `MediaLauncher` (Spotify PKCE + URI fallback), and on-demand `CameraFrameStreamer` (CameraX).
 * **Phase 3 (Commute Memory):** Room KMP persistence for voice notes/receipts and hands-free messaging intents.
 * **Phase 4 (iOS Port & CI):** `iosMain` `actual` implementations (`AVAudioEngine`, `AVFoundation`, `CoreLocation`, URL schemes) + GitHub Actions macOS framework build verification.

@@ -3,7 +3,7 @@ package com.nowlsantos.drivelive.presentation
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nowlsantos.drivelive.agent.ToolCallDispatcher
-import com.nowlsantos.drivelive.network.MichaelLiveClient
+import com.nowlsantos.drivelive.network.KaiLiveClient
 import com.nowlsantos.drivelive.platform.AudioEngine
 import com.nowlsantos.drivelive.platform.CameraFrameStreamer
 import com.nowlsantos.drivelive.platform.DisplayController
@@ -12,9 +12,9 @@ import com.nowlsantos.drivelive.platform.LocalVoiceSpeaker
 import com.nowlsantos.drivelive.platform.LocationProvider
 import com.nowlsantos.drivelive.platform.MediaLauncher
 import com.nowlsantos.drivelive.platform.NavigationLauncher
-import com.nowlsantos.drivelive.state.MichaelEvent
-import com.nowlsantos.drivelive.state.MichaelSessionState
-import com.nowlsantos.drivelive.state.MichaelStateMachine
+import com.nowlsantos.drivelive.state.KaiEvent
+import com.nowlsantos.drivelive.state.KaiSessionState
+import com.nowlsantos.drivelive.state.KaiStateMachine
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -26,8 +26,8 @@ import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 
 class DriveLiveViewModel(
-    private val stateMachine: MichaelStateMachine,
-    private val liveClient: MichaelLiveClient,
+    private val stateMachine: KaiStateMachine,
+    private val liveClient: KaiLiveClient,
     private val audioEngine: AudioEngine,
     private val cameraStreamer: CameraFrameStreamer,
     private val displayController: DisplayController,
@@ -38,7 +38,7 @@ class DriveLiveViewModel(
     driveStorage: DriveStorage
 ) : ViewModel() {
 
-    val sessionState: StateFlow<MichaelSessionState> = stateMachine.state
+    val sessionState: StateFlow<KaiSessionState> = stateMachine.state
 
     private var eventCollectorJob: Job? = null
     private var micStreamJob: Job? = null
@@ -83,8 +83,8 @@ class DriveLiveViewModel(
 
     fun toggleSession() {
         when (sessionState.value) {
-            is MichaelSessionState.Idle,
-            is MichaelSessionState.Error -> startDriveSession()
+            is KaiSessionState.Idle,
+            is KaiSessionState.Error -> startDriveSession()
             else -> endDriveSession()
         }
     }
@@ -97,7 +97,7 @@ class DriveLiveViewModel(
         hasGreetedThisSession = false
         focusModeEnabled = false
         displayController.setKeepScreenOn(true)
-        stateMachine.onEvent(MichaelEvent.StartSession)
+        stateMachine.onEvent(KaiEvent.StartSession)
         startFatigueTimer()
         viewModelScope.launch {
             liveClient.connect(scope = viewModelScope)
@@ -129,11 +129,11 @@ class DriveLiveViewModel(
         viewModelScope.launch {
             liveClient.disconnect()
         }
-        stateMachine.onEvent(MichaelEvent.StopSession)
+        stateMachine.onEvent(KaiEvent.StopSession)
     }
 
     fun triggerManualCameraInspect() {
-        if (sessionState.value is MichaelSessionState.Idle) return
+        if (sessionState.value is KaiSessionState.Idle) return
         startCameraBurst(reason = "Driver requested visual scan", durationSeconds = 8)
     }
 
@@ -141,15 +141,15 @@ class DriveLiveViewModel(
         cameraBurstJob?.cancel()
         cameraBurstJob = null
         cameraStreamer.stop()
-        stateMachine.onEvent(MichaelEvent.CameraBurstFinished)
+        stateMachine.onEvent(KaiEvent.CameraBurstFinished)
     }
 
     private fun startFatigueTimer() {
         fatigueCheckJob?.cancel()
         fatigueCheckJob = viewModelScope.launch {
             delay(90.minutes)
-            if (sessionState.value !is MichaelSessionState.Idle &&
-                sessionState.value !is MichaelSessionState.Error
+            if (sessionState.value !is KaiSessionState.Idle &&
+                sessionState.value !is KaiSessionState.Error
             ) {
                 liveClient.sendClientTurn(
                     "[SYSTEM CHECK-IN] The driver has been driving continuously for 90 minutes. Gently suggest taking a quick stretch or coffee break."
@@ -163,7 +163,7 @@ class DriveLiveViewModel(
         eventCollectorJob = viewModelScope.launch {
             liveClient.events.collect { event ->
                 when (event) {
-                    is MichaelEvent.HandshakeComplete -> {
+                    is KaiEvent.HandshakeComplete -> {
                         stateMachine.onEvent(event)
                         startMicrophoneStream()
                         if (!hasGreetedThisSession) {
@@ -174,21 +174,21 @@ class DriveLiveViewModel(
                         }
                     }
 
-                    is MichaelEvent.ServerAudioChunk -> {
+                    is KaiEvent.ServerAudioChunk -> {
                         stateMachine.onEvent(event)
                         if (event.pcm24k.isNotEmpty()) {
                             audioPlaybackChannel.trySend(event.pcm24k)
                         }
                     }
 
-                    is MichaelEvent.BargeInDetected -> {
+                    is KaiEvent.BargeInDetected -> {
                         // Drain any queued playback chunks immediately on driver interruption
                         while (audioPlaybackChannel.tryReceive().isSuccess) { }
                         audioEngine.flushPlayback()
                         stateMachine.onEvent(event)
                     }
 
-                    is MichaelEvent.ToolCallReceived -> {
+                    is KaiEvent.ToolCallReceived -> {
                         stateMachine.onEvent(event)
                         this@launch.launch {
                             val resultJson = toolDispatcher.dispatch(event.toolName, event.argsJson)
@@ -196,17 +196,17 @@ class DriveLiveViewModel(
                         }
                     }
 
-                    is MichaelEvent.TriggerCameraBurst -> {
+                    is KaiEvent.TriggerCameraBurst -> {
                         startCameraBurst(event.reason, event.durationSeconds)
                     }
 
-                    is MichaelEvent.ConnectionDropped -> {
+                    is KaiEvent.ConnectionDropped -> {
                         micStreamJob?.cancel()
                         micStreamJob = null
                         reconnectWithBackoff(event.resumptionHandle)
                     }
 
-                    is MichaelEvent.SessionFailed -> {
+                    is KaiEvent.SessionFailed -> {
                         micStreamJob?.cancel()
                         micStreamJob = null
                         if (event.recoverable) {
@@ -227,7 +227,7 @@ class DriveLiveViewModel(
         micStreamJob?.cancel()
         micStreamJob = viewModelScope.launch {
             audioEngine.startCapture().collect { (pcmChunk, amplitude) ->
-                stateMachine.onEvent(MichaelEvent.MicAudioFrame(pcmChunk, amplitude))
+                stateMachine.onEvent(KaiEvent.MicAudioFrame(pcmChunk, amplitude))
                 liveClient.sendPcm16kAudio(pcmChunk)
             }
         }
@@ -235,13 +235,13 @@ class DriveLiveViewModel(
 
     private fun startCameraBurst(reason: String, durationSeconds: Int) {
         cameraBurstJob?.cancel()
-        stateMachine.onEvent(MichaelEvent.TriggerCameraBurst(reason, durationSeconds))
+        stateMachine.onEvent(KaiEvent.TriggerCameraBurst(reason, durationSeconds))
 
         cameraBurstJob = viewModelScope.launch {
             val countdownJob = launch {
                 for (remaining in (durationSeconds - 1) downTo 1) {
                     delay(1000L.milliseconds)
-                    stateMachine.onEvent(MichaelEvent.CameraBurstTick(remaining))
+                    stateMachine.onEvent(KaiEvent.CameraBurstTick(remaining))
                 }
             }
             try {
@@ -251,14 +251,14 @@ class DriveLiveViewModel(
             } finally {
                 countdownJob.cancel()
                 cameraStreamer.stop()
-                stateMachine.onEvent(MichaelEvent.CameraBurstFinished)
+                stateMachine.onEvent(KaiEvent.CameraBurstFinished)
             }
         }
     }
 
     private fun reconnectWithBackoff(resumptionHandle: String?) {
-        stateMachine.onEvent(MichaelEvent.ConnectionDropped(resumptionHandle))
-        val currentAttempt = (sessionState.value as? MichaelSessionState.Reconnecting)?.attempt ?: 1
+        stateMachine.onEvent(KaiEvent.ConnectionDropped(resumptionHandle))
+        val currentAttempt = (sessionState.value as? KaiSessionState.Reconnecting)?.attempt ?: 1
         if (currentAttempt == 2) {
             localVoiceSpeaker.speak("Signal dropped. Attempting to reconnect.")
         }
@@ -268,7 +268,7 @@ class DriveLiveViewModel(
             if (currentAttempt > 5) {
                 localVoiceSpeaker.speak("Voice link disconnected. Tap Engage KAI to retry.")
                 stateMachine.onEvent(
-                    MichaelEvent.SessionFailed(
+                    KaiEvent.SessionFailed(
                         error = "Voice link disconnected. Please tap Engage KAI to retry.",
                         recoverable = false
                     )
@@ -276,7 +276,7 @@ class DriveLiveViewModel(
                 return@launch
             }
             delay((1500L * currentAttempt).milliseconds)
-            if (sessionState.value is MichaelSessionState.Reconnecting) {
+            if (sessionState.value is KaiSessionState.Reconnecting) {
                 liveClient.connect(viewModelScope, resumptionHandle)
             }
         }

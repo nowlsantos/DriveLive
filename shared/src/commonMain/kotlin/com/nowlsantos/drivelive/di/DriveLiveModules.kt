@@ -1,9 +1,9 @@
 package com.nowlsantos.drivelive.di
 
 import com.nowlsantos.drivelive.config.BuildSecrets
-import com.nowlsantos.drivelive.network.MichaelLiveClient
+import com.nowlsantos.drivelive.network.KaiLiveClient
 import com.nowlsantos.drivelive.presentation.DriveLiveViewModel
-import com.nowlsantos.drivelive.state.MichaelStateMachine
+import com.nowlsantos.drivelive.state.KaiStateMachine
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.websocket.WebSockets
@@ -38,14 +38,14 @@ fun commonModule(geminiApiKey: String): Module = module {
         }
     }
 
-    singleOf(::MichaelStateMachine)
+    singleOf(::KaiStateMachine)
 
     single {
         val resolvedKey = geminiApiKey
             .trim()
             .takeIf { it.isNotEmpty() && !it.startsWith("$(") }
             ?: BuildSecrets.DEFAULT_GEMINI_API_KEY
-        MichaelLiveClient(
+        KaiLiveClient(
             httpClient = get(),
             apiKey = resolvedKey
         )

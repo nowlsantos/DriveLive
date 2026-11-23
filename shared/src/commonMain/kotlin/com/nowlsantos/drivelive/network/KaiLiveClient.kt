@@ -1,7 +1,7 @@
 package com.nowlsantos.drivelive.network
 
-import com.nowlsantos.drivelive.agent.MichaelAgentConfig
-import com.nowlsantos.drivelive.state.MichaelEvent
+import com.nowlsantos.drivelive.agent.KaiAgentConfig
+import com.nowlsantos.drivelive.state.KaiEvent
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
 import io.ktor.client.plugins.websocket.webSocketSession
@@ -17,15 +17,12 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlin.io.encoding.Base64
-import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlin.math.sqrt
 
-@OptIn(ExperimentalEncodingApi::class)
-class MichaelLiveClient(
+class KaiLiveClient(
     private val httpClient: HttpClient,
     private val apiKey: String
 ) {
@@ -39,15 +36,15 @@ class MichaelLiveClient(
     private var receiveJob: Job? = null
     private var latestResumptionHandle: String? = null
 
-    private val _events = MutableSharedFlow<MichaelEvent>(extraBufferCapacity = 64)
-    val events: SharedFlow<MichaelEvent> = _events.asSharedFlow()
+    private val _events = MutableSharedFlow<KaiEvent>(extraBufferCapacity = 64)
+    val events: SharedFlow<KaiEvent> = _events.asSharedFlow()
 
     suspend fun connect(scope: CoroutineScope, resumptionHandle: String? = latestResumptionHandle) {
         disconnect()
         val trimmedKey = apiKey.trim()
         if (trimmedKey.isEmpty() || trimmedKey.startsWith("$(")) {
             _events.tryEmit(
-                MichaelEvent.SessionFailed(
+                KaiEvent.SessionFailed(
                     error = "Missing GEMINI_API_KEY. Set GEMINI_API_KEY in local.properties or Config.xcconfig.",
                     recoverable = false
                 )
@@ -63,7 +60,7 @@ class MichaelLiveClient(
             session = ws
 
             val setupPayload = json.encodeToString(
-                MichaelAgentConfig.buildSetupMessage(resumptionHandle)
+                KaiAgentConfig.buildSetupMessage(resumptionHandle)
             )
             ws.send(Frame.Text(setupPayload))
 
@@ -75,7 +72,7 @@ class MichaelLiveClient(
             val closeReason = runCatching { session?.closeReason?.await()?.message }.getOrNull()
             val detail = closeReason?.takeIf { it.isNotBlank() } ?: e.message ?: "Failed to connect to Gemini Live"
             _events.tryEmit(
-                MichaelEvent.SessionFailed(
+                KaiEvent.SessionFailed(
                     error = detail,
                     recoverable = true
                 )
@@ -99,24 +96,24 @@ class MichaelLiveClient(
             }
             val closeMsg = runCatching { ws.closeReason.await()?.message }.getOrNull()
             if (!receivedAnyFrame && !closeMsg.isNullOrBlank()) {
-                _events.tryEmit(MichaelEvent.SessionFailed(error = closeMsg, recoverable = false))
+                _events.tryEmit(KaiEvent.SessionFailed(error = closeMsg, recoverable = false))
             } else {
-                _events.tryEmit(MichaelEvent.ConnectionDropped(latestResumptionHandle))
+                _events.tryEmit(KaiEvent.ConnectionDropped(latestResumptionHandle))
             }
         } catch (e: Exception) {
             if (e is CancellationException) throw e
             val closeMsg = runCatching { ws.closeReason.await()?.message }.getOrNull()
             if (!receivedAnyFrame && !closeMsg.isNullOrBlank()) {
-                _events.tryEmit(MichaelEvent.SessionFailed(error = closeMsg, recoverable = false))
+                _events.tryEmit(KaiEvent.SessionFailed(error = closeMsg, recoverable = false))
             } else {
-                _events.tryEmit(MichaelEvent.ConnectionDropped(latestResumptionHandle))
+                _events.tryEmit(KaiEvent.ConnectionDropped(latestResumptionHandle))
             }
         }
     }
 
     private fun handleServerMessage(msg: ServerMessage) {
         if (msg.setupComplete != null) {
-            _events.tryEmit(MichaelEvent.HandshakeComplete)
+            _events.tryEmit(KaiEvent.HandshakeComplete)
         }
 
         msg.sessionResumptionUpdate?.newHandle?.let { handle ->
@@ -125,7 +122,7 @@ class MichaelLiveClient(
 
         msg.toolCall?.functionCalls?.forEach { call ->
             _events.tryEmit(
-                MichaelEvent.ToolCallReceived(
+                KaiEvent.ToolCallReceived(
                     callId = call.id,
                     toolName = call.name,
                     argsJson = call.args.toString()
@@ -135,12 +132,12 @@ class MichaelLiveClient(
 
         msg.serverContent?.let { content ->
             if (content.interrupted == true) {
-                _events.tryEmit(MichaelEvent.BargeInDetected)
+                _events.tryEmit(KaiEvent.BargeInDetected)
             }
 
             content.inputTranscription?.text?.let { userText ->
                 if (userText.isNotBlank()) {
-                    _events.tryEmit(MichaelEvent.InterimUserSpeech(userText))
+                    _events.tryEmit(KaiEvent.InterimUserSpeech(userText))
                 }
             }
 
@@ -153,7 +150,7 @@ class MichaelLiveClient(
                         val amplitude = calculateRmsAmplitude(pcmBytes)
                         emittedAudioChunk = true
                         _events.tryEmit(
-                            MichaelEvent.ServerAudioChunk(
+                            KaiEvent.ServerAudioChunk(
                                 pcm24k = pcmBytes,
                                 amplitude = amplitude,
                                 transcript = outputTranscript
@@ -165,7 +162,7 @@ class MichaelLiveClient(
 
             if (!emittedAudioChunk && !outputTranscript.isNullOrBlank()) {
                 _events.tryEmit(
-                    MichaelEvent.ServerAudioChunk(
+                    KaiEvent.ServerAudioChunk(
                         pcm24k = ByteArray(0),
                         amplitude = 0f,
                         transcript = outputTranscript
@@ -174,7 +171,7 @@ class MichaelLiveClient(
             }
 
             if (content.turnComplete == true) {
-                _events.tryEmit(MichaelEvent.TurnComplete)
+                _events.tryEmit(KaiEvent.TurnComplete)
             }
         }
     }
@@ -243,7 +240,7 @@ class MichaelLiveClient(
             )
         )
         ws.send(Frame.Text(json.encodeToString(payload)))
-        _events.tryEmit(MichaelEvent.ToolCallCompleted(callId))
+        _events.tryEmit(KaiEvent.ToolCallCompleted(callId))
     }
 
     suspend fun disconnect() {
@@ -262,7 +259,7 @@ class MichaelLiveClient(
         val sampleCount = pcm16BitLittleEndian.size / 2
         for (i in 0 until sampleCount) {
             val low = pcm16BitLittleEndian[i * 2].toInt() and 0xFF
-            val high = pcm16BitLittleEndian[i * 2 + 1].toInt()
+            val high = pcm16BitLittleEndian[(i * 2) + 1].toInt()
             val sample = (high shl 8) or low
             val normalized = sample / 32768.0
             sumSquares += normalized * normalized

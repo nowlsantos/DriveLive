@@ -29,8 +29,8 @@
 | Layer | Technology |
 | :--- | :--- |
 | **Shared UI** | Compose Multiplatform (Material 3, OLED Dark Car HUD in `commonMain`) |
-| **State Management** | Formal Finite State Machine ([`MichaelStateMachine`](./shared/src/commonMain/kotlin/com/nowlsantos/drivelive/state/MichaelStateMachine.kt) & [`MichaelSessionState`](./shared/src/commonMain/kotlin/com/nowlsantos/drivelive/state/MichaelSessionState.kt)) + [`DriveLiveViewModel`](./shared/src/commonMain/kotlin/com/nowlsantos/drivelive/presentation/DriveLiveViewModel.kt) |
-| **Live Networking** | Ktor WebSockets (`OkHttp` on Android, `Darwin` on iOS) + `kotlinx.serialization` ([`MichaelLiveClient`](./shared/src/commonMain/kotlin/com/nowlsantos/drivelive/network/MichaelLiveClient.kt)) |
+| **State Management** | Formal Finite State Machine ([`KaiStateMachine`](./shared/src/commonMain/kotlin/com/nowlsantos/drivelive/state/KaiStateMachine.kt) & [`KaiSessionState`](./shared/src/commonMain/kotlin/com/nowlsantos/drivelive/state/KaiSessionState.kt)) + [`DriveLiveViewModel`](./shared/src/commonMain/kotlin/com/nowlsantos/drivelive/presentation/DriveLiveViewModel.kt) |
+| **Live Networking** | Ktor WebSockets (`OkHttp` on Android, `Darwin` on iOS) + `kotlinx.serialization` ([`KaiLiveClient`](./shared/src/commonMain/kotlin/com/nowlsantos/drivelive/network/KaiLiveClient.kt)) |
 | **Dependency Injection** | Koin Multiplatform (`koin-core`, `koin-compose`, `koin-compose-viewmodel`) |
 | **Android Hardware Bridges** | `AudioRecord` / `AudioTrack` (AEC + Bluetooth SCO/BLE), `CameraX` (`ImageAnalysis` + `PreviewView`), `LocationManager`, Native Intents |
 | **iOS Hardware Bridges** | `AVAudioEngine` / `AVAudioPlayerNode` (VoiceChat AEC + 48kHz-to-16kHz downsampler), `AVFoundation` (`UIKitView` preview layer), `CLLocationManager`, `UIApplication` URL schemes |

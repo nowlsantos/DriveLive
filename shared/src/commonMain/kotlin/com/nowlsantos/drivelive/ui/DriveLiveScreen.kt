@@ -48,15 +48,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.nowlsantos.drivelive.state.MichaelSessionState
+import com.nowlsantos.drivelive.state.KaiSessionState
 import com.nowlsantos.drivelive.presentation.DriveLiveViewModel
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.math.abs
 
 private val OledBlack = Color(0xFF050505)
 private val SurfaceDark = Color(0xFF121418)
-private val MichaelRed = Color(0xFFFF2A2A)
-private val MichaelAmber = Color(0xFFFF9100)
+private val KaiRed = Color(0xFFFF2A2A)
+private val KaiAmber = Color(0xFFFF9100)
 private val DriverCyan = Color(0xFF00E5FF)
 private val TextPrimary = Color(0xFFF4F6F9)
 private val TextSecondary = Color(0xFF9AA4B2)
@@ -88,7 +88,7 @@ fun DriveLiveScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                MichaelLedEqualizer(
+                KaiLedEqualizer(
                     state = state,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -109,7 +109,7 @@ fun DriveLiveScreen(
             )
         }
 
-        val cameraBurst = state as? MichaelSessionState.CameraBurst
+        val cameraBurst = state as? KaiSessionState.CameraBurst
         AnimatedVisibility(
             visible = cameraBurst != null,
             enter = fadeIn() + scaleIn(initialScale = 0.88f),
@@ -137,7 +137,7 @@ private fun CameraPipCard(
         modifier = Modifier
             .size(width = 136.dp, height = 184.dp)
             .clip(RoundedCornerShape(16.dp))
-            .border(1.5.dp, MichaelRed.copy(alpha = 0.85f), RoundedCornerShape(16.dp))
+            .border(1.5.dp, KaiRed.copy(alpha = 0.85f), RoundedCornerShape(16.dp))
             .background(SurfaceDark)
             .clickable { onCancelScan() }
     ) {
@@ -155,7 +155,7 @@ private fun CameraPipCard(
             Box(
                 modifier = Modifier
                     .size(7.dp)
-                    .background(MichaelRed, CircleShape)
+                    .background(KaiRed, CircleShape)
             )
             Text(
                 text = "SCAN ${remainingSeconds}S",
@@ -181,16 +181,16 @@ private fun CameraPipCard(
 }
 
 @Composable
-private fun StatusHeader(state: MichaelSessionState) {
+private fun StatusHeader(state: KaiSessionState) {
     val (badgeText, badgeColor) = when (state) {
-        is MichaelSessionState.Idle -> "STANDBY" to TextSecondary
-        is MichaelSessionState.Connecting -> "INITIALIZING KAI..." to MichaelAmber
-        is MichaelSessionState.Listening -> "KAI // LISTENING" to DriverCyan
-        is MichaelSessionState.Speaking -> "KAI // SPEAKING" to MichaelRed
-        is MichaelSessionState.ExecutingTool -> "EXECUTING // ${state.toolName.uppercase()}" to MichaelAmber
-        is MichaelSessionState.CameraBurst -> "OPTICAL SCAN (${state.remainingSeconds}S)" to MichaelRed
-        is MichaelSessionState.Reconnecting -> "RECONNECTING (${state.attempt})..." to MichaelAmber
-        is MichaelSessionState.Error -> "SYSTEM ALERT" to MichaelRed
+        is KaiSessionState.Idle -> "STANDBY" to TextSecondary
+        is KaiSessionState.Connecting -> "INITIALIZING KAI..." to KaiAmber
+        is KaiSessionState.Listening -> "KAI // LISTENING" to DriverCyan
+        is KaiSessionState.Speaking -> "KAI // SPEAKING" to KaiRed
+        is KaiSessionState.ExecutingTool -> "EXECUTING // ${state.toolName.uppercase()}" to KaiAmber
+        is KaiSessionState.CameraBurst -> "OPTICAL SCAN (${state.remainingSeconds}S)" to KaiRed
+        is KaiSessionState.Reconnecting -> "RECONNECTING (${state.attempt})..." to KaiAmber
+        is KaiSessionState.Error -> "SYSTEM ALERT" to KaiRed
     }
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -213,13 +213,13 @@ private fun StatusHeader(state: MichaelSessionState) {
 }
 
 @Composable
-private fun MichaelLedEqualizer(
-    state: MichaelSessionState,
+private fun KaiLedEqualizer(
+    state: KaiSessionState,
     modifier: Modifier = Modifier
 ) {
     val targetAmplitude = when (state) {
-        is MichaelSessionState.Speaking -> (state.voiceAmplitude * 3.2f).coerceIn(0.15f, 1f)
-        is MichaelSessionState.Listening -> (state.micAmplitude * 3.5f).coerceIn(0.08f, 1f)
+        is KaiSessionState.Speaking -> (state.voiceAmplitude * 3.2f).coerceIn(0.15f, 1f)
+        is KaiSessionState.Listening -> (state.micAmplitude * 3.5f).coerceIn(0.08f, 1f)
         else -> 0.05f
     }
 
@@ -241,12 +241,12 @@ private fun MichaelLedEqualizer(
     )
 
     val activeColor = when (state) {
-        is MichaelSessionState.Speaking,
-        is MichaelSessionState.CameraBurst -> MichaelRed
-        is MichaelSessionState.Listening -> DriverCyan
-        is MichaelSessionState.Connecting,
-        is MichaelSessionState.ExecutingTool,
-        is MichaelSessionState.Reconnecting -> MichaelAmber
+        is KaiSessionState.Speaking,
+        is KaiSessionState.CameraBurst -> KaiRed
+        is KaiSessionState.Listening -> DriverCyan
+        is KaiSessionState.Connecting,
+        is KaiSessionState.ExecutingTool,
+        is KaiSessionState.Reconnecting -> KaiAmber
         else -> Color(0xFF2A2E37)
     }
 
@@ -258,9 +258,9 @@ private fun MichaelLedEqualizer(
         val barWidth = ((size.width - totalGaps) / barCount).coerceAtLeast(8f)
         val maxBarHeight = size.height * 0.9f
 
-        val isScanningMode = state is MichaelSessionState.Connecting ||
-                state is MichaelSessionState.ExecutingTool ||
-                state is MichaelSessionState.Reconnecting
+        val isScanningMode = state is KaiSessionState.Connecting ||
+                state is KaiSessionState.ExecutingTool ||
+                state is KaiSessionState.Reconnecting
 
         for (i in 0 until barCount) {
             val heightRatio = if (isScanningMode) {
@@ -294,16 +294,16 @@ private fun MichaelLedEqualizer(
 }
 
 @Composable
-private fun TranscriptCard(state: MichaelSessionState) {
+private fun TranscriptCard(state: KaiSessionState) {
     val displayText = when (state) {
-        is MichaelSessionState.Idle -> "Tap ENGAGE KAI to start your drive."
-        is MichaelSessionState.Connecting -> "Establishing secure voice link..."
-        is MichaelSessionState.Listening -> state.interimTranscript.ifBlank { "Go ahead, I'm listening." }
-        is MichaelSessionState.Speaking -> state.outputTranscript.ifBlank { "..." }
-        is MichaelSessionState.ExecutingTool -> state.summary
-        is MichaelSessionState.CameraBurst -> "Inspecting: ${state.reason}"
-        is MichaelSessionState.Reconnecting -> "Signal drop detected. Resuming session..."
-        is MichaelSessionState.Error -> state.message
+        is KaiSessionState.Idle -> "Tap ENGAGE KAI to start your drive."
+        is KaiSessionState.Connecting -> "Establishing secure voice link..."
+        is KaiSessionState.Listening -> state.interimTranscript.ifBlank { "Go ahead, I'm listening." }
+        is KaiSessionState.Speaking -> state.outputTranscript.ifBlank { "..." }
+        is KaiSessionState.ExecutingTool -> state.summary
+        is KaiSessionState.CameraBurst -> "Inspecting: ${state.reason}"
+        is KaiSessionState.Reconnecting -> "Signal drop detected. Resuming session..."
+        is KaiSessionState.Error -> state.message
     }
 
     Box(
@@ -328,13 +328,13 @@ private fun TranscriptCard(state: MichaelSessionState) {
 
 @Composable
 private fun BottomControlBar(
-    state: MichaelSessionState,
+    state: KaiSessionState,
     hasPermissions: Boolean,
     onRequestPermissions: () -> Unit,
     onToggleSession: () -> Unit,
     onInspectRoad: () -> Unit
 ) {
-    val isInactive = state is MichaelSessionState.Idle || state is MichaelSessionState.Error
+    val isInactive = state is KaiSessionState.Idle || state is KaiSessionState.Error
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -373,7 +373,7 @@ private fun BottomControlBar(
                 .height(82.dp),
             shape = RoundedCornerShape(20.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = if (isInactive) MichaelRed else Color(0xFF232730),
+                containerColor = if (isInactive) KaiRed else Color(0xFF232730),
                 contentColor = TextPrimary
             )
         ) {
