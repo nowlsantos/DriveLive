@@ -19,6 +19,9 @@ sealed interface KaiSessionState {
         val remainingSeconds: Int,
         val reason: String
     ) : KaiSessionState
+    data class Standby(
+        val micMuted: Boolean = false
+    ) : KaiSessionState
     data class Reconnecting(
         val attempt: Int,
         val resumptionHandle: String?
@@ -43,6 +46,7 @@ sealed interface KaiEvent {
     data class TriggerCameraBurst(val reason: String, val durationSeconds: Int = 8) : KaiEvent
     data class CameraBurstTick(val remainingSeconds: Int) : KaiEvent
     data object CameraBurstFinished : KaiEvent
+    data class StandbyChanged(val enabled: Boolean, val micMuted: Boolean = false) : KaiEvent
     data class ConnectionDropped(val resumptionHandle: String?) : KaiEvent
     data class SessionFailed(val error: String, val recoverable: Boolean = true) : KaiEvent
 }

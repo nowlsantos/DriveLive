@@ -14,6 +14,11 @@ object KaiAgentConfig {
         If Focus Mode is enabled, drop all banter and limit every response to a single ultra-short confirmation sentence.
         You understand and respond naturally in English, Tagalog, or Taglish depending on how the driver addresses you.
         When asked to play music or radio (e.g., a genre, mood, holiday music, or radio station), default to the built-in Live Radio Player via play_music (source = RADIO) so audio starts playing immediately with zero taps inside DriveLive. Only open Spotify (source = SPOTIFY) if the driver explicitly asks to open the Spotify app.
+        STANDBY & SESSION CONTROL (English / Tagalog / Taglish):
+        - If the driver says "standby", "standby mode", "pause listening", "tahimik muna", "standby ka muna", "wait lang", or "huwag ka munang magsalita", immediately call set_standby_mode(enabled = true) and give a 1-sentence confirmation (e.g., "Standing by. Call my name whenever you need me.").
+        - While Standby Mode is active, remain completely silent and ignore background noise, radio, or passenger chatter. Only wake up when the driver explicitly calls "Kai", "Hey Kai", "Gumising ka Kai", or "Resume" — when waking up, immediately call set_standby_mode(enabled = false) first.
+        - If the driver says "goodbye Kai", "end session", "stop DriveLive", "tapos na", "patayin na", or "off na", call end_drive_session and give a brief 1-sentence sign-off ("Drive safe. Signing off.").
+        - Note: If the driver simply says "pause" or "i-pause" while Live Radio or music is playing, pause the media via control_media_playback(PLAY_PAUSE) instead of entering Standby.
         When asked to navigate, control music or radio, inspect the road or dashboard via camera, check trip telemetry, check upcoming calendar events, log fuel/toll expenses, save or find a parking spot, manage an errand stop checklist, or manage voice notes, execute the corresponding tool immediately and confirm briefly.
         Use Google Search grounding for real-time weather, business hours, traffic news, or current facts.
         SAFETY GUARDRAILS: Never ask the driver to read long lists (offer at most 2 options). If camera frames are blurry, dark, or obstructed, state clearly that you cannot read them safely instead of guessing. If you see a red dashboard warning light (oil, brake, temperature), advise pulling over safely. Never fabricate road conditions, routes, speed, or vehicle diagnostics.
@@ -195,6 +200,27 @@ object KaiAgentConfig {
                     )
                 ),
                 required = listOf("enabled")
+            )
+        ),
+        FunctionDeclaration(
+            name = "set_standby_mode",
+            description = "Put Kai into quiet Standby Mode (ignoring background/passenger talk until called by name) or wake Kai back up to active listening.",
+            parameters = SchemaObject(
+                properties = mapOf(
+                    "enabled" to SchemaProperty(
+                        type = "BOOLEAN",
+                        description = "True to enter Standby Mode, false to wake Kai up to active listening."
+                    )
+                ),
+                required = listOf("enabled")
+            )
+        ),
+        FunctionDeclaration(
+            name = "end_drive_session",
+            description = "End the active DriveLive voice session cleanly and return to Idle standby after Kai's brief goodbye.",
+            parameters = SchemaObject(
+                properties = emptyMap(),
+                required = emptyList()
             )
         ),
         FunctionDeclaration(

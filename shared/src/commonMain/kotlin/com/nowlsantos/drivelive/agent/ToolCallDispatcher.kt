@@ -51,6 +51,8 @@ class ToolCallDispatcher(
     private val getSessionElapsedMinutes: () -> Long,
     private val isFocusModeEnabled: () -> Boolean,
     private val onSetFocusMode: (Boolean) -> Unit,
+    private val onSetStandbyMode: (Boolean) -> Unit,
+    private val onScheduleEndSession: () -> Unit,
     private val onRadioStateChanged: (stationName: String?, isPlaying: Boolean) -> Unit,
     private val onRequestCameraBurst: (reason: String, durationSeconds: Int) -> Unit
 ) {
@@ -75,6 +77,8 @@ class ToolCallDispatcher(
             "recall_notes" -> handleRecallNotes()
             "clear_notes" -> handleClearNotes()
             "set_focus_mode" -> handleSetFocusMode(args)
+            "set_standby_mode" -> handleSetStandbyMode(args)
+            "end_drive_session" -> handleEndDriveSession()
             "log_fuel_or_toll" -> handleLogExpense(args)
             "get_expense_summary" -> handleGetExpenseSummary()
             "check_calendar_briefing" -> handleCalendarBriefing(args)
@@ -398,6 +402,22 @@ class ToolCallDispatcher(
         return buildJsonObject {
             put("status", "ok")
             put("focus_mode_enabled", enabled)
+        }
+    }
+
+    private fun handleSetStandbyMode(args: JsonObject): JsonObject {
+        val enabled = args["enabled"]?.jsonPrimitive?.booleanOrNull ?: true
+        onSetStandbyMode(enabled)
+        return buildJsonObject {
+            put("status", "ok")
+            put("standby_enabled", enabled)
+        }
+    }
+
+    private fun handleEndDriveSession(): JsonObject {
+        onScheduleEndSession()
+        return buildJsonObject {
+            put("status", "ending_session")
         }
     }
 

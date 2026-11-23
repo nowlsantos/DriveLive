@@ -62,11 +62,17 @@ class DriveLiveViewModel(
     private var reconnectJob: Job? = null
     private var fatigueCheckJob: Job? = null
     private var audioPlaybackJob: Job? = null
+    private var standbyTransitionJob: Job? = null
+    private var endSessionJob: Job? = null
     private val audioPlaybackChannel = Channel<ByteArray>(capacity = 128)
 
     private var sessionStartMark: TimeMark? = null
     private var hasGreetedThisSession = false
     private var focusModeEnabled = false
+    private var standbyRequested = false
+    private var hardMicMuted = false
+    private var wakeWordSeenRecently = false
+    private var pendingEndSession = false
 
     private val toolDispatcher = ToolCallDispatcher(
         navigationLauncher = navigationLauncher,
@@ -81,6 +87,8 @@ class DriveLiveViewModel(
         },
         isFocusModeEnabled = { focusModeEnabled },
         onSetFocusMode = { enabled -> focusModeEnabled = enabled },
+        onSetStandbyMode = { enabled -> handleStandbyTool(enabled) },
+        onScheduleEndSession = { scheduleVoiceEndSession() },
         onRadioStateChanged = { stationName, isPlaying ->
             _radioStatus.value = RadioUiStatus(stationName = stationName, isPlaying = isPlaying)
         },
@@ -121,10 +129,18 @@ class DriveLiveViewModel(
     private fun startDriveSession() {
         reconnectJob?.cancel()
         reconnectJob = null
+        standbyTransitionJob?.cancel()
+        standbyTransitionJob = null
+        endSessionJob?.cancel()
+        endSessionJob = null
         localVoiceSpeaker.stop()
         sessionStartMark = TimeSource.Monotonic.markNow()
         hasGreetedThisSession = false
         focusModeEnabled = false
+        standbyRequested = false
+        hardMicMuted = false
+        wakeWordSeenRecently = false
+        pendingEndSession = false
         displayController.setKeepScreenOn(true)
         stateMachine.onEvent(KaiEvent.StartSession)
         startFatigueTimer()
@@ -140,6 +156,12 @@ class DriveLiveViewModel(
         fatigueCheckJob?.cancel()
         fatigueCheckJob = null
 
+        standbyTransitionJob?.cancel()
+        standbyTransitionJob = null
+
+        endSessionJob?.cancel()
+        endSessionJob = null
+
         micStreamJob?.cancel()
         micStreamJob = null
 
@@ -149,6 +171,10 @@ class DriveLiveViewModel(
         sessionStartMark = null
         hasGreetedThisSession = false
         focusModeEnabled = false
+        standbyRequested = false
+        hardMicMuted = false
+        wakeWordSeenRecently = false
+        pendingEndSession = false
 
         while (audioPlaybackChannel.tryReceive().isSuccess) { }
         audioEngine.stopAll()
@@ -161,6 +187,60 @@ class DriveLiveViewModel(
             liveClient.disconnect()
         }
         stateMachine.onEvent(KaiEvent.StopSession)
+    }
+
+    fun toggleStandbyFromUi() {
+        val current = sessionState.value
+        if (current is KaiSessionState.Idle || current is KaiSessionState.Error) return
+
+        if (current is KaiSessionState.Standby) {
+            hardMicMuted = false
+            standbyRequested = false
+            wakeWordSeenRecently = false
+            standbyTransitionJob?.cancel()
+            stateMachine.onEvent(KaiEvent.StandbyChanged(enabled = false))
+        } else {
+            hardMicMuted = true
+            standbyRequested = false
+            wakeWordSeenRecently = false
+            standbyTransitionJob?.cancel()
+            while (audioPlaybackChannel.tryReceive().isSuccess) { }
+            audioEngine.flushPlayback()
+            radioPlayer.setDucked(false)
+            stateMachine.onEvent(KaiEvent.StandbyChanged(enabled = true, micMuted = true))
+        }
+    }
+
+    private fun handleStandbyTool(enabled: Boolean) {
+        standbyTransitionJob?.cancel()
+        if (enabled) {
+            standbyRequested = true
+            wakeWordSeenRecently = false
+            standbyTransitionJob = viewModelScope.launch {
+                delay(3500.milliseconds)
+                if (standbyRequested) {
+                    standbyRequested = false
+                    stateMachine.onEvent(KaiEvent.StandbyChanged(enabled = true, micMuted = false))
+                }
+            }
+        } else {
+            standbyRequested = false
+            hardMicMuted = false
+            wakeWordSeenRecently = false
+            stateMachine.onEvent(KaiEvent.StandbyChanged(enabled = false))
+        }
+    }
+
+    private fun scheduleVoiceEndSession() {
+        if (pendingEndSession) return
+        pendingEndSession = true
+        endSessionJob?.cancel()
+        endSessionJob = viewModelScope.launch {
+            delay(6000.milliseconds)
+            if (pendingEndSession) {
+                endDriveSession()
+            }
+        }
     }
 
     fun toggleRadioPlayPause() {
@@ -223,7 +303,31 @@ class DriveLiveViewModel(
                         }
                     }
 
+                    is KaiEvent.InterimUserSpeech -> {
+                        if (sessionState.value is KaiSessionState.Standby) {
+                            val lower = event.text.lowercase()
+                            if (lower.contains("kai") ||
+                                lower.contains("resume") ||
+                                lower.contains("wake") ||
+                                lower.contains("gising") ||
+                                lower.contains("balik")
+                            ) {
+                                wakeWordSeenRecently = true
+                            }
+                        }
+                        stateMachine.onEvent(event)
+                    }
+
                     is KaiEvent.ServerAudioChunk -> {
+                        if (sessionState.value is KaiSessionState.Standby) {
+                            if (wakeWordSeenRecently) {
+                                wakeWordSeenRecently = false
+                                stateMachine.onEvent(KaiEvent.StandbyChanged(enabled = false))
+                            } else {
+                                // Ignore unsolicited audio while in Standby
+                                return@collect
+                            }
+                        }
                         radioPlayer.setDucked(true)
                         stateMachine.onEvent(event)
                         if (event.pcm24k.isNotEmpty()) {
@@ -241,7 +345,22 @@ class DriveLiveViewModel(
 
                     is KaiEvent.TurnComplete -> {
                         radioPlayer.setDucked(false)
-                        stateMachine.onEvent(event)
+                        if (standbyRequested) {
+                            standbyRequested = false
+                            standbyTransitionJob?.cancel()
+                            stateMachine.onEvent(KaiEvent.StandbyChanged(enabled = true, micMuted = false))
+                        } else {
+                            stateMachine.onEvent(event)
+                        }
+                        if (pendingEndSession) {
+                            endSessionJob?.cancel()
+                            endSessionJob = viewModelScope.launch {
+                                delay(1400.milliseconds)
+                                if (pendingEndSession) {
+                                    endDriveSession()
+                                }
+                            }
+                        }
                     }
 
                     is KaiEvent.ToolCallReceived -> {
@@ -283,8 +402,10 @@ class DriveLiveViewModel(
         micStreamJob?.cancel()
         micStreamJob = viewModelScope.launch {
             audioEngine.startCapture().collect { (pcmChunk, amplitude) ->
-                stateMachine.onEvent(KaiEvent.MicAudioFrame(pcmChunk, amplitude))
-                liveClient.sendPcm16kAudio(pcmChunk)
+                if (!hardMicMuted) {
+                    stateMachine.onEvent(KaiEvent.MicAudioFrame(pcmChunk, amplitude))
+                    liveClient.sendPcm16kAudio(pcmChunk)
+                }
             }
         }
     }

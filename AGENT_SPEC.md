@@ -49,6 +49,8 @@ SAFETY GUARDRAILS: Never ask the driver to read long lists (offer at most 2 opti
 | `recall_notes` | Read back saved driving notes and reminders | *(none)* |
 | `clear_notes` | Clear saved driving notes after driver confirmation | *(none)* |
 | `set_focus_mode` | Toggle ultra-terse response mode for heavy traffic or bad weather | `enabled` (`Boolean`) |
+| `set_standby_mode` | Put Kai into quiet Standby Mode (ignores background/passenger talk until woken by name) or wake Kai back up | `enabled` (`Boolean`) |
+| `end_drive_session` | Cleanly end the active DriveLive voice session after Kai's brief sign-off | *(none)* |
 | `googleSearch` | Gemini Live native real-time web grounding | *(managed by Gemini Live)* |
 
 ---

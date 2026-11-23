@@ -35,7 +35,7 @@ class KaiStateMachine {
         }
 
         is KaiEvent.ServerAudioChunk -> {
-            if (current is KaiSessionState.CameraBurst) {
+            if (current is KaiSessionState.CameraBurst || current is KaiSessionState.Standby) {
                 current
             } else {
                 val prevTranscript = (current as? KaiSessionState.Speaking)?.outputTranscript.orEmpty()
@@ -47,7 +47,10 @@ class KaiStateMachine {
             }
         }
 
-        is KaiEvent.BargeInDetected -> KaiSessionState.Listening()
+        is KaiEvent.BargeInDetected -> when (current) {
+            is KaiSessionState.Standby -> current
+            else -> KaiSessionState.Listening()
+        }
 
         is KaiEvent.TurnComplete -> when (current) {
             is KaiSessionState.Speaking,
@@ -55,10 +58,13 @@ class KaiStateMachine {
             else -> current
         }
 
-        is KaiEvent.ToolCallReceived -> KaiSessionState.ExecutingTool(
-            toolName = event.toolName,
-            summary = formatToolSummary(event.toolName)
-        )
+        is KaiEvent.ToolCallReceived -> when {
+            current is KaiSessionState.Standby && event.toolName != "set_standby_mode" && event.toolName != "end_drive_session" -> current
+            else -> KaiSessionState.ExecutingTool(
+                toolName = event.toolName,
+                summary = formatToolSummary(event.toolName)
+            )
+        }
 
         is KaiEvent.ToolCallCompleted -> when (current) {
             is KaiSessionState.ExecutingTool -> KaiSessionState.Listening()
@@ -76,6 +82,14 @@ class KaiStateMachine {
         }
 
         is KaiEvent.CameraBurstFinished -> KaiSessionState.Listening()
+
+        is KaiEvent.StandbyChanged -> {
+            if (event.enabled) {
+                KaiSessionState.Standby(micMuted = event.micMuted)
+            } else {
+                KaiSessionState.Listening()
+            }
+        }
 
         is KaiEvent.ConnectionDropped -> {
             if (current is KaiSessionState.Idle) {
@@ -108,6 +122,8 @@ class KaiStateMachine {
         "recall_notes" -> "Reading saved notes..."
         "clear_notes" -> "Clearing saved notes..."
         "set_focus_mode" -> "Updating Focus Mode..."
+        "set_standby_mode" -> "Updating Standby Mode..."
+        "end_drive_session" -> "Ending drive session..."
         "log_fuel_or_toll" -> "Logging vehicle expense..."
         "get_expense_summary" -> "Reading expense logs..."
         "check_calendar_briefing" -> "Checking today's schedule..."

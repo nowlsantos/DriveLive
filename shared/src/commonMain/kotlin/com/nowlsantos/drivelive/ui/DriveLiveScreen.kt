@@ -131,6 +131,7 @@ fun DriveLiveScreen(
                 hasPermissions = hasPermissions,
                 onRequestPermissions = onRequestPermissions,
                 onToggleSession = { viewModel.toggleSession() },
+                onToggleStandby = { viewModel.toggleStandbyFromUi() },
                 onInspectRoad = { viewModel.triggerManualCameraInspect() }
             )
         }
@@ -287,6 +288,7 @@ private fun StatusHeader(state: KaiSessionState) {
         is KaiSessionState.Speaking -> "KAI // SPEAKING" to KaiRed
         is KaiSessionState.ExecutingTool -> "EXECUTING // ${state.toolName.uppercase()}" to KaiAmber
         is KaiSessionState.CameraBurst -> "OPTICAL SCAN (${state.remainingSeconds}S)" to KaiRed
+        is KaiSessionState.Standby -> if (state.micMuted) "KAI // MIC MUTED" to KaiAmber else "KAI // STANDBY" to KaiAmber
         is KaiSessionState.Reconnecting -> "RECONNECTING (${state.attempt})..." to KaiAmber
         is KaiSessionState.Error -> "SYSTEM ALERT" to KaiRed
     }
@@ -400,6 +402,11 @@ private fun TranscriptCard(state: KaiSessionState) {
         is KaiSessionState.Speaking -> state.outputTranscript.ifBlank { "..." }
         is KaiSessionState.ExecutingTool -> state.summary
         is KaiSessionState.CameraBurst -> "Inspecting: ${state.reason}"
+        is KaiSessionState.Standby -> if (state.micMuted) {
+            "Mic muted. Tap WAKE KAI to resume."
+        } else {
+            "Standing by. Say \"Hey Kai\" or tap WAKE KAI."
+        }
         is KaiSessionState.Reconnecting -> "Signal drop detected. Resuming session..."
         is KaiSessionState.Error -> state.message
     }
@@ -430,31 +437,56 @@ private fun BottomControlBar(
     hasPermissions: Boolean,
     onRequestPermissions: () -> Unit,
     onToggleSession: () -> Unit,
+    onToggleStandby: () -> Unit,
     onInspectRoad: () -> Unit
 ) {
     val isInactive = state is KaiSessionState.Idle || state is KaiSessionState.Error
+    val isStandby = state is KaiSessionState.Standby
 
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         if (!isInactive) {
-            OutlinedButton(
-                onClick = onInspectRoad,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(76.dp),
-                shape = RoundedCornerShape(18.dp),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = DriverCyan
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(
-                    text = "LOOK AT ROAD (8S SCAN)",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp
-                )
+                OutlinedButton(
+                    onClick = onInspectRoad,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(72.dp),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = DriverCyan
+                    )
+                ) {
+                    Text(
+                        text = "ROAD SCAN",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.8.sp
+                    )
+                }
+
+                OutlinedButton(
+                    onClick = onToggleStandby,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(72.dp),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = if (isStandby) DriverCyan else KaiAmber
+                    )
+                ) {
+                    Text(
+                        text = if (isStandby) "WAKE KAI" else "STANDBY",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.8.sp
+                    )
+                }
             }
         }
 
