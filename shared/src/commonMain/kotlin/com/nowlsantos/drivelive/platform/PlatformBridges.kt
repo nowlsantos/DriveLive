@@ -61,6 +61,16 @@ expect class DisplayController {
     fun setKeepScreenOn(enabled: Boolean)
 }
 
+data class CalendarEventItem(
+    val title: String,
+    val startTimeLabel: String,
+    val location: String?
+)
+
+expect class CalendarProvider {
+    suspend fun getUpcomingEvents(hoursAhead: Int = 18): List<CalendarEventItem>
+}
+
 expect class DriveStorage {
     fun putString(key: String, value: String)
     fun getString(key: String): String?

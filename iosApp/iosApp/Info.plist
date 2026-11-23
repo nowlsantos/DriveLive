@@ -36,6 +36,10 @@
 	<string>DriveLive uses your location to ground navigation routes and nearby destination searches while driving.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>DriveLive routes voice audio through your vehicle's Bluetooth hands-free system.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>DriveLive reads your upcoming calendar events so KAI can give you a hands-free schedule briefing and route to your next meeting.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>DriveLive reads your upcoming calendar events so KAI can give you a hands-free schedule briefing.</string>
 
 	<!-- External Navigation & Media URL Schemes (canOpenURL) -->
 	<key>LSApplicationQueriesSchemes</key>

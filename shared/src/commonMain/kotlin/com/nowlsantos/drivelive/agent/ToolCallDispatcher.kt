@@ -1,5 +1,6 @@
 package com.nowlsantos.drivelive.agent
 
+import com.nowlsantos.drivelive.platform.CalendarProvider
 import com.nowlsantos.drivelive.platform.DriveStorage
 import com.nowlsantos.drivelive.platform.GeoCoordinate
 import com.nowlsantos.drivelive.platform.LaunchResult
@@ -8,19 +9,39 @@ import com.nowlsantos.drivelive.platform.MediaControlAction
 import com.nowlsantos.drivelive.platform.MediaLauncher
 import com.nowlsantos.drivelive.platform.NavigationApp
 import com.nowlsantos.drivelive.platform.NavigationLauncher
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlin.math.roundToInt
 
+@Serializable
+private data class ExpenseLogEntry(
+    val category: String,
+    val amount: Double,
+    val liters: Double? = null,
+    val odometerKm: Double? = null,
+    val location: String? = null
+)
+
+@Serializable
+private data class ErrandStop(
+    val title: String,
+    val done: Boolean = false
+)
+
 class ToolCallDispatcher(
     private val navigationLauncher: NavigationLauncher,
     private val mediaLauncher: MediaLauncher,
     private val locationProvider: LocationProvider,
+    private val calendarProvider: CalendarProvider,
     private val driveStorage: DriveStorage,
     private val getSessionElapsedMinutes: () -> Long,
     private val isFocusModeEnabled: () -> Boolean,
@@ -45,6 +66,10 @@ class ToolCallDispatcher(
             "recall_notes" -> handleRecallNotes()
             "clear_notes" -> handleClearNotes()
             "set_focus_mode" -> handleSetFocusMode(args)
+            "log_fuel_or_toll" -> handleLogExpense(args)
+            "get_expense_summary" -> handleGetExpenseSummary()
+            "check_calendar_briefing" -> handleCalendarBriefing(args)
+            "manage_errand_queue" -> handleManageErrandQueue(args)
             else -> buildJsonObject {
                 put("status", "error")
                 put("message", "Unknown tool: $toolName")
@@ -252,11 +277,173 @@ class ToolCallDispatcher(
         }
     }
 
+    private fun handleLogExpense(args: JsonObject): JsonObject {
+        val category = args["category"]?.jsonPrimitive?.content?.uppercase() ?: "FUEL"
+        val amount = args["amount"]?.jsonPrimitive?.doubleOrNull
+            ?: return buildJsonObject {
+                put("status", "error")
+                put("message", "Expense amount is required.")
+            }
+        val liters = args["liters"]?.jsonPrimitive?.doubleOrNull
+        val odometerKm = args["odometer_km"]?.jsonPrimitive?.doubleOrNull
+        val location = args["station_or_location"]?.jsonPrimitive?.content?.trim()?.takeIf { it.isNotBlank() }
+
+        val existing = loadExpenseLogs()
+        val entry = ExpenseLogEntry(
+            category = category,
+            amount = amount,
+            liters = liters,
+            odometerKm = odometerKm,
+            location = location
+        )
+        val updated = (existing + entry).takeLast(50)
+        driveStorage.putString(KEY_EXPENSE_LOGS, json.encodeToString(updated))
+
+        return buildJsonObject {
+            put("status", "logged")
+            put("category", category)
+            put("amount", amount)
+            liters?.let { put("liters", it) }
+            odometerKm?.let { put("odometer_km", it) }
+            location?.let { put("location", it) }
+            put("total_entries", updated.size)
+        }
+    }
+
+    private fun handleGetExpenseSummary(): JsonObject {
+        val entries = loadExpenseLogs()
+        val total = entries.sumOf { it.amount }
+        val fuelTotal = entries.filter { it.category == "FUEL" }.sumOf { it.amount }
+        val tollTotal = entries.filter { it.category == "TOLL" }.sumOf { it.amount }
+
+        return buildJsonObject {
+            put("status", "ok")
+            put("entry_count", entries.size)
+            put("total_amount", total)
+            put("fuel_total", fuelTotal)
+            put("toll_total", tollTotal)
+            put(
+                "recent_entries",
+                buildJsonArray {
+                    entries.takeLast(5).forEach { e ->
+                        add(
+                            buildJsonObject {
+                                put("category", e.category)
+                                put("amount", e.amount)
+                                e.liters?.let { put("liters", it) }
+                                e.odometerKm?.let { put("odometer_km", it) }
+                                e.location?.let { put("location", it) }
+                            }
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    private suspend fun handleCalendarBriefing(args: JsonObject): JsonObject {
+        val hoursAhead = args["hours_ahead"]?.jsonPrimitive?.intOrNull ?: 18
+        val events = calendarProvider.getUpcomingEvents(hoursAhead)
+        return buildJsonObject {
+            put("status", "ok")
+            put("event_count", events.size)
+            put(
+                "events",
+                buildJsonArray {
+                    events.forEach { ev ->
+                        add(
+                            buildJsonObject {
+                                put("title", ev.title)
+                                put("start_time", ev.startTimeLabel)
+                                ev.location?.let { put("location", it) }
+                            }
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    private fun handleManageErrandQueue(args: JsonObject): JsonObject {
+        val action = args["action"]?.jsonPrimitive?.content?.uppercase() ?: "LIST"
+        val current = loadErrandQueue().toMutableList()
+
+        when (action) {
+            "ADD" -> {
+                val rawStops = args["stops"]?.jsonPrimitive?.content.orEmpty()
+                val newStops = rawStops.split(",", ";", " and ")
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() }
+                if (newStops.isEmpty()) {
+                    return buildJsonObject {
+                        put("status", "error")
+                        put("message", "No errand stops provided.")
+                    }
+                }
+                newStops.forEach { title -> current.add(ErrandStop(title = title, done = false)) }
+                saveErrandQueue(current)
+            }
+            "COMPLETE" -> {
+                val keyword = args["item"]?.jsonPrimitive?.content?.trim().orEmpty()
+                val targetIndex = if (keyword.isNotBlank()) {
+                    current.indexOfFirst { !it.done && it.title.contains(keyword, ignoreCase = true) }
+                } else {
+                    current.indexOfFirst { !it.done }
+                }
+                if (targetIndex < 0) {
+                    return buildJsonObject {
+                        put("status", "not_found")
+                        put("message", "No matching pending errand stop found.")
+                    }
+                }
+                val completed = current[targetIndex]
+                current[targetIndex] = completed.copy(done = true)
+                saveErrandQueue(current)
+            }
+            "CLEAR" -> {
+                current.clear()
+                driveStorage.remove(KEY_ERRAND_QUEUE)
+            }
+        }
+
+        val remaining = current.filter { !it.done }.map { it.title }
+        return buildJsonObject {
+            put("status", "ok")
+            put("action", action)
+            put("pending_count", remaining.size)
+            put("next_stop", remaining.firstOrNull() ?: "")
+            put(
+                "pending_stops",
+                buildJsonArray {
+                    remaining.forEach { stop ->
+                        add(kotlinx.serialization.json.JsonPrimitive(stop))
+                    }
+                }
+            )
+        }
+    }
+
+    private fun loadExpenseLogs(): List<ExpenseLogEntry> {
+        val raw = driveStorage.getString(KEY_EXPENSE_LOGS) ?: return emptyList()
+        return runCatching { json.decodeFromString<List<ExpenseLogEntry>>(raw) }.getOrDefault(emptyList())
+    }
+
+    private fun loadErrandQueue(): List<ErrandStop> {
+        val raw = driveStorage.getString(KEY_ERRAND_QUEUE) ?: return emptyList()
+        return runCatching { json.decodeFromString<List<ErrandStop>>(raw) }.getOrDefault(emptyList())
+    }
+
+    private fun saveErrandQueue(items: List<ErrandStop>) {
+        driveStorage.putString(KEY_ERRAND_QUEUE, json.encodeToString(items.takeLast(25)))
+    }
+
     private companion object {
         const val KEY_PARKING_LAT = "kai_parking_lat"
         const val KEY_PARKING_LON = "kai_parking_lon"
         const val KEY_PARKING_NOTE = "kai_parking_note"
         const val KEY_VOICE_NOTES = "kai_voice_notes"
+        const val KEY_EXPENSE_LOGS = "kai_expense_logs"
+        const val KEY_ERRAND_QUEUE = "kai_errand_queue"
         const val NOTES_DELIMITER = "\n---KAI_NOTE---\n"
     }
 }

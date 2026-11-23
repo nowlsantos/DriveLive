@@ -28,10 +28,18 @@ import platform.AVFAudio.setActive
 import platform.AVFoundation.AVCaptureVideoPreviewLayer
 import platform.CoreLocation.CLLocationManager
 import platform.CoreLocation.kCLLocationAccuracyBestForNavigation
+import platform.EventKit.EKAuthorizationStatusAuthorized
+import platform.EventKit.EKAuthorizationStatusFullAccess
+import platform.EventKit.EKEntityType
+import platform.EventKit.EKEvent
+import platform.EventKit.EKEventStore
 import platform.Foundation.NSCharacterSet
+import platform.Foundation.NSDate
+import platform.Foundation.NSDateFormatter
 import platform.Foundation.NSURL
 import platform.Foundation.NSUserDefaults
 import platform.Foundation.URLQueryAllowedCharacterSet
+import platform.Foundation.dateWithTimeIntervalSinceNow
 import platform.Foundation.stringByAddingPercentEncodingWithAllowedCharacters
 import platform.MediaPlayer.MPMusicPlaybackState
 import platform.MediaPlayer.MPMusicPlayerController
@@ -431,6 +439,51 @@ actual class LocalVoiceSpeaker {
     actual fun shutdown() {
         stop()
     }
+}
+
+actual class CalendarProvider {
+    private val eventStore = EKEventStore()
+
+    actual suspend fun getUpcomingEvents(hoursAhead: Int): List<CalendarEventItem> {
+        val granted = ensureCalendarAccess()
+        if (!granted) return emptyList()
+
+        val startDate = NSDate()
+        val endDate = NSDate.dateWithTimeIntervalSinceNow(hoursAhead.coerceAtLeast(1) * 3600.0)
+        val predicate = eventStore.predicateForEventsWithStartDate(
+            startDate = startDate,
+            endDate = endDate,
+            calendars = null
+        )
+        val formatter = NSDateFormatter().apply {
+            dateFormat = "h:mm a"
+        }
+
+        val events = eventStore.eventsMatchingPredicate(predicate)
+        return events.mapNotNull { item ->
+            val ev = item as? EKEvent ?: return@mapNotNull null
+            val title = ev.title?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val start = ev.startDate ?: startDate
+            CalendarEventItem(
+                title = title,
+                startTimeLabel = formatter.stringFromDate(start),
+                location = ev.location?.takeIf { it.isNotBlank() }
+            )
+        }.take(10)
+    }
+
+    private suspend fun ensureCalendarAccess(): Boolean =
+        suspendCancellableCoroutine { continuation ->
+            val status = EKEventStore.authorizationStatusForEntityType(EKEntityType.EKEntityTypeEvent)
+            if (status == EKAuthorizationStatusFullAccess || status == EKAuthorizationStatusAuthorized) {
+                if (continuation.isActive) continuation.resume(true)
+                return@suspendCancellableCoroutine
+            }
+
+            eventStore.requestFullAccessToEventsWithCompletion { granted, _ ->
+                if (continuation.isActive) continuation.resume(granted)
+            }
+        }
 }
 
 private fun String.encodeUrlComponent(): String {

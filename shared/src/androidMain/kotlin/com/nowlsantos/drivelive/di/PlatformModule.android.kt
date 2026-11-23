@@ -1,6 +1,7 @@
 package com.nowlsantos.drivelive.di
 
 import com.nowlsantos.drivelive.platform.AudioEngine
+import com.nowlsantos.drivelive.platform.CalendarProvider
 import com.nowlsantos.drivelive.platform.CameraFrameStreamer
 import com.nowlsantos.drivelive.platform.DisplayController
 import com.nowlsantos.drivelive.platform.DriveStorage
@@ -21,4 +22,5 @@ actual val platformModule: Module = module {
     single { DisplayController() }
     single { DriveStorage(androidContext()) }
     single { LocalVoiceSpeaker(androidContext()) }
+    single { CalendarProvider(androidContext()) }
 }

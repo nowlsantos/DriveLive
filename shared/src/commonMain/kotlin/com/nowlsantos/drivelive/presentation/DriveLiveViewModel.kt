@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.nowlsantos.drivelive.agent.ToolCallDispatcher
 import com.nowlsantos.drivelive.network.KaiLiveClient
 import com.nowlsantos.drivelive.platform.AudioEngine
+import com.nowlsantos.drivelive.platform.CalendarProvider
 import com.nowlsantos.drivelive.platform.CameraFrameStreamer
 import com.nowlsantos.drivelive.platform.DisplayController
 import com.nowlsantos.drivelive.platform.DriveStorage
@@ -35,6 +36,7 @@ class DriveLiveViewModel(
     navigationLauncher: NavigationLauncher,
     mediaLauncher: MediaLauncher,
     locationProvider: LocationProvider,
+    calendarProvider: CalendarProvider,
     driveStorage: DriveStorage
 ) : ViewModel() {
 
@@ -56,6 +58,7 @@ class DriveLiveViewModel(
         navigationLauncher = navigationLauncher,
         mediaLauncher = mediaLauncher,
         locationProvider = locationProvider,
+        calendarProvider = calendarProvider,
         driveStorage = driveStorage,
         getSessionElapsedMinutes = {
             sessionStartMark?.elapsedNow()?.inWholeMinutes ?: 0L
@@ -86,6 +89,13 @@ class DriveLiveViewModel(
             is KaiSessionState.Idle,
             is KaiSessionState.Error -> startDriveSession()
             else -> endDriveSession()
+        }
+    }
+
+    fun engageFromShortcut() {
+        val current = sessionState.value
+        if (current is KaiSessionState.Idle || current is KaiSessionState.Error) {
+            startDriveSession()
         }
     }
 

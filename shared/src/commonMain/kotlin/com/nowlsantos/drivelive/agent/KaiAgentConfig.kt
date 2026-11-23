@@ -12,7 +12,7 @@ object KaiAgentConfig {
         Speak in a composed, articulate, and subtly witty tone—concise and direct, keeping responses to 1–3 short spoken sentences so the driver stays focused on the road.
         If Focus Mode is enabled, drop all banter and limit every response to a single ultra-short confirmation sentence.
         You understand and respond naturally in English, Tagalog, or Taglish depending on how the driver addresses you.
-        When asked to navigate, control music or Spotify, inspect the road or dashboard via camera, check trip telemetry, save or find a parking spot, or manage voice notes, execute the corresponding tool immediately and confirm briefly.
+        When asked to navigate, control music or Spotify, inspect the road or dashboard via camera, check trip telemetry, check upcoming calendar events, log fuel/toll expenses, save or find a parking spot, manage an errand stop checklist, or manage voice notes, execute the corresponding tool immediately and confirm briefly.
         Use Google Search grounding for real-time weather, business hours, traffic news, or current facts.
         SAFETY GUARDRAILS: Never ask the driver to read long lists (offer at most 2 options). If camera frames are blurry, dark, or obstructed, state clearly that you cannot read them safely instead of guessing. If you see a red dashboard warning light (oil, brake, temperature), advise pulling over safely. Never fabricate road conditions, routes, speed, or vehicle diagnostics.
     """
@@ -180,6 +180,79 @@ object KaiAgentConfig {
                     )
                 ),
                 required = listOf("enabled")
+            )
+        ),
+        FunctionDeclaration(
+            name = "log_fuel_or_toll",
+            description = "Log a fuel fill-up, toll fee, or vehicle maintenance expense with optional liters, odometer km, and station or toll plaza name.",
+            parameters = SchemaObject(
+                properties = mapOf(
+                    "category" to SchemaProperty(
+                        type = "STRING",
+                        description = "Expense category.",
+                        enum = listOf("FUEL", "TOLL", "MAINTENANCE")
+                    ),
+                    "amount" to SchemaProperty(
+                        type = "NUMBER",
+                        description = "Total amount spent."
+                    ),
+                    "liters" to SchemaProperty(
+                        type = "NUMBER",
+                        description = "Optional fuel volume in liters."
+                    ),
+                    "odometer_km" to SchemaProperty(
+                        type = "NUMBER",
+                        description = "Optional odometer reading in kilometers."
+                    ),
+                    "station_or_location" to SchemaProperty(
+                        type = "STRING",
+                        description = "Optional gas station, toll plaza, or shop name."
+                    )
+                ),
+                required = listOf("category", "amount")
+            )
+        ),
+        FunctionDeclaration(
+            name = "get_expense_summary",
+            description = "Retrieve logged fuel, toll, and maintenance expenses and total spend.",
+            parameters = SchemaObject(
+                properties = emptyMap(),
+                required = emptyList()
+            )
+        ),
+        FunctionDeclaration(
+            name = "check_calendar_briefing",
+            description = "Read the driver's upcoming calendar events and locations for a hands-free schedule briefing.",
+            parameters = SchemaObject(
+                properties = mapOf(
+                    "hours_ahead" to SchemaProperty(
+                        type = "INTEGER",
+                        description = "How many hours ahead to check (default 18)."
+                    )
+                ),
+                required = emptyList()
+            )
+        ),
+        FunctionDeclaration(
+            name = "manage_errand_queue",
+            description = "Manage an ordered multi-stop pre-drive checklist / errand queue (add stops, list remaining stops, check off a completed stop, get the next stop, or clear).",
+            parameters = SchemaObject(
+                properties = mapOf(
+                    "action" to SchemaProperty(
+                        type = "STRING",
+                        description = "Queue operation to perform.",
+                        enum = listOf("ADD", "LIST", "COMPLETE", "NEXT", "CLEAR")
+                    ),
+                    "stops" to SchemaProperty(
+                        type = "STRING",
+                        description = "Comma-separated errand stops when adding (e.g., 'ATM, Drop off package, Gas station')."
+                    ),
+                    "item" to SchemaProperty(
+                        type = "STRING",
+                        description = "Stop name or keyword to mark completed when action is COMPLETE (if omitted, completes the current next stop)."
+                    )
+                ),
+                required = listOf("action")
             )
         )
     )

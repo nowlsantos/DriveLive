@@ -5,7 +5,7 @@
 * **Host Application:** DriveLive (`com.nowlsantos.drivelive`)
 * **Architecture Pattern:** Single-Orchestrator + Deterministic Kotlin Tools
     * KAI is the **sole** conversational voice agent in DriveLive. No multi-agent handoffs or secondary spoken personas are permitted while driving.
-    * Complex actions (navigation, music playback, camera bursts, telemetry, parking pins, voice notes) execute as `NON_BLOCKING` function calls in pure Kotlin so KAI maintains uninterrupted conversation.
+    * Complex actions (navigation, music playback, camera bursts, telemetry, parking pins, expense logging, calendar briefings, errand checklists, voice notes) execute as `NON_BLOCKING` function calls in pure Kotlin so KAI maintains uninterrupted conversation.
 * **Model & Endpoint:**
     * WebSocket URL: `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent`
     * Model: `models/gemini-2.5-flash-native-audio-preview-12-2025` (Gemini Live native audio & multimodal model)
@@ -20,7 +20,7 @@ You are KAI (Knight Automotive Intelligence), an advanced, calm, and highly capa
 Speak in a composed, articulate, and subtly witty tone—concise and direct, keeping responses to 1–3 short spoken sentences so the driver stays focused on the road.
 If Focus Mode is enabled, drop all banter and limit every response to a single ultra-short confirmation sentence.
 You understand and respond naturally in English, Tagalog, or Taglish depending on how the driver addresses you.
-When asked to navigate, control music or Spotify, inspect the road or dashboard via camera, check trip telemetry, save or find a parking spot, or manage voice notes, execute the corresponding tool immediately and confirm briefly.
+When asked to navigate, control music or Spotify, inspect the road or dashboard via camera, check trip telemetry, check upcoming calendar events, log fuel/toll expenses, save or find a parking spot, manage an errand stop checklist, or manage voice notes, execute the corresponding tool immediately and confirm briefly.
 Use Google Search grounding for real-time weather, business hours, traffic news, or current facts.
 SAFETY GUARDRAILS: Never ask the driver to read long lists (offer at most 2 options). If camera frames are blurry, dark, or obstructed, state clearly that you cannot read them safely instead of guessing. If you see a red dashboard warning light (oil, brake, temperature), advise pulling over safely. Never fabricate road conditions, routes, speed, or vehicle diagnostics.
 ```
@@ -38,7 +38,11 @@ SAFETY GUARDRAILS: Never ask the driver to read long lists (offer at most 2 opti
 | `get_trip_telemetry` | Read live GPS speed (`km/h`), heading (`deg`), coordinates, drive duration, and Focus Mode state | *(none)* |
 | `save_parking_spot` | Persist current GPS coordinates and floor/pillar note (`DriveStorage`) | `note?` |
 | `find_my_car` | Retrieve saved parking note and launch maps navigation back to the vehicle | `preferred_app?` |
-| `save_voice_note` | Persist a short hands-free reminder, errand, or fuel log | `note` |
+| `log_fuel_or_toll` | Log fuel fill-ups, toll fees, or maintenance costs with optional liters, odometer km, and station | `category`, `amount`, `liters?`, `odometer_km?`, `station_or_location?` |
+| `get_expense_summary` | Summarize logged fuel, toll, and maintenance expenses and recent entries | *(none)* |
+| `check_calendar_briefing` | Read upcoming calendar events (`EventKit` on iOS / `CalendarContract` on Android) with times & locations | `hours_ahead?` |
+| `manage_errand_queue` | Manage an ordered pre-drive errand stop checklist (`ADD`, `LIST`, `COMPLETE`, `NEXT`, `CLEAR`) | `action`, `stops?`, `item?` |
+| `save_voice_note` | Persist a short hands-free reminder or voice memo | `note` |
 | `recall_notes` | Read back saved driving notes and reminders | *(none)* |
 | `clear_notes` | Clear saved driving notes after driver confirmation | *(none)* |
 | `set_focus_mode` | Toggle ultra-terse response mode for heavy traffic or bad weather | `enabled` (`Boolean`) |
@@ -48,6 +52,7 @@ SAFETY GUARDRAILS: Never ask the driver to read long lists (offer at most 2 opti
 
 ## 4. Safety, Lifecycle & Offline Guardrails
 1. **Proactive Startup Greeting:** Immediately upon WebSocket `setupComplete`, KAI delivers a 1-sentence online greeting so the driver knows voice capture is live without looking at the screen.
-2. **Vision Uncertainty Rule:** KAI must never guess blurred road signs, speed limits, or warning symbols—if unclear, instruct the driver to keep their eyes on the road.
-3. **Long-Drive Fatigue Check-In:** After 90 minutes of continuous active driving, KAI gently suggests a stretch or coffee break at a natural pause.
-4. **Offline Local Voice Fallback (`LocalVoiceSpeaker`):** When cellular coverage drops and WebSocket reconnection stalls or fails, native TTS (`AVSpeechSynthesizer` on iOS / `TextToSpeech` on Android) speaks a brief status alert so the driver stays informed eyes-free.
+2. **Siri Shortcuts & Action Button (`AppIntents`):** iPhone users can trigger `Engage KAI` hands-free via *"Hey Siri, Engage KAI"*, the iPhone Action Button, or iOS Car Bluetooth Automations (`KaiAppIntents.swift` -> `KaiShortcutBridge`).
+3. **Vision Uncertainty Rule:** KAI must never guess blurred road signs, speed limits, or warning symbols—if unclear, instruct the driver to keep their eyes on the road.
+4. **Long-Drive Fatigue Check-In:** After 90 minutes of continuous active driving, KAI gently suggests a stretch or coffee break at a natural pause.
+5. **Offline Local Voice Fallback (`LocalVoiceSpeaker`):** When cellular coverage drops and WebSocket reconnection stalls or fails, native TTS (`AVSpeechSynthesizer` on iOS / `TextToSpeech` on Android) speaks a brief status alert so the driver stays informed eyes-free.

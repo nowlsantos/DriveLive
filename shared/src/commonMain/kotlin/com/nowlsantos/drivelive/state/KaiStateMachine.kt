@@ -107,6 +107,10 @@ class KaiStateMachine {
         "recall_notes" -> "Reading saved notes..."
         "clear_notes" -> "Clearing saved notes..."
         "set_focus_mode" -> "Updating Focus Mode..."
+        "log_fuel_or_toll" -> "Logging vehicle expense..."
+        "get_expense_summary" -> "Reading expense logs..."
+        "check_calendar_briefing" -> "Checking today's schedule..."
+        "manage_errand_queue" -> "Updating errand checklist..."
         else -> "Executing $toolName..."
     }
 }

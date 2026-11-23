@@ -34,6 +34,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -49,6 +50,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nowlsantos.drivelive.state.KaiSessionState
+import com.nowlsantos.drivelive.state.KaiShortcutBridge
 import com.nowlsantos.drivelive.presentation.DriveLiveViewModel
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.math.abs
@@ -68,6 +70,13 @@ fun DriveLiveScreen(
     onRequestPermissions: () -> Unit = {}
 ) {
     val state by viewModel.sessionState.collectAsState()
+    val pendingShortcutEngage by KaiShortcutBridge.pendingEngage.collectAsState()
+
+    LaunchedEffect(hasPermissions, pendingShortcutEngage) {
+        if (hasPermissions && pendingShortcutEngage && KaiShortcutBridge.consumeEngage()) {
+            viewModel.engageFromShortcut()
+        }
+    }
 
     Box(
         modifier = Modifier

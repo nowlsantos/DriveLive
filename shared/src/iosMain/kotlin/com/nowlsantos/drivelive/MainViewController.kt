@@ -8,6 +8,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.window.ComposeUIViewController
 import com.nowlsantos.drivelive.di.initDriveLiveKoin
+import com.nowlsantos.drivelive.state.KaiShortcutBridge
 import com.nowlsantos.drivelive.ui.DriveLiveScreen
 import org.koin.mp.KoinPlatform
 import platform.AVFoundation.AVAuthorizationStatusAuthorized
@@ -20,6 +21,10 @@ import platform.CoreLocation.CLLocationManager
 import platform.UIKit.UIViewController
 import platform.darwin.dispatch_async
 import platform.darwin.dispatch_get_main_queue
+
+fun engageKaiFromShortcut() {
+    KaiShortcutBridge.requestEngage()
+}
 
 fun MainViewController(geminiApiKey: String): UIViewController {
     if (KoinPlatform.getKoinOrNull() == null) {

@@ -1,12 +1,16 @@
 package com.nowlsantos.drivelive.platform
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.location.LocationManager
+import android.provider.CalendarContract
 import android.media.AudioAttributes
 import android.media.AudioDeviceInfo
 import android.media.AudioFormat
@@ -45,6 +49,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.lang.ref.WeakReference
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
 import kotlin.math.max
@@ -584,4 +590,60 @@ actual class LocalVoiceSpeaker(context: Context) {
         tts = null
         isReady = false
     }
+}
+
+actual class CalendarProvider(private val context: Context) {
+    actual suspend fun getUpcomingEvents(hoursAhead: Int): List<CalendarEventItem> =
+        withContext(Dispatchers.IO) {
+            val hasPermission = ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.READ_CALENDAR
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!hasPermission) return@withContext emptyList()
+
+            val startMillis = System.currentTimeMillis()
+            val endMillis = startMillis + (hoursAhead.coerceAtLeast(1) * 3_600_000L)
+            val builder = CalendarContract.Instances.CONTENT_URI.buildUpon()
+            ContentUris.appendId(builder, startMillis)
+            ContentUris.appendId(builder, endMillis)
+
+            val projection = arrayOf(
+                CalendarContract.Instances.TITLE,
+                CalendarContract.Instances.BEGIN,
+                CalendarContract.Instances.EVENT_LOCATION
+            )
+
+            val formatter = SimpleDateFormat("h:mm a", Locale.getDefault())
+            val results = mutableListOf<CalendarEventItem>()
+
+            try {
+                context.contentResolver.query(
+                    builder.build(),
+                    projection,
+                    null,
+                    null,
+                    "${CalendarContract.Instances.BEGIN} ASC"
+                )?.use { cursor ->
+                    val titleIdx = cursor.getColumnIndex(CalendarContract.Instances.TITLE)
+                    val beginIdx = cursor.getColumnIndex(CalendarContract.Instances.BEGIN)
+                    val locIdx = cursor.getColumnIndex(CalendarContract.Instances.EVENT_LOCATION)
+
+                    while (cursor.moveToNext() && results.size < 10) {
+                        val title = if (titleIdx >= 0) cursor.getString(titleIdx).orEmpty() else ""
+                        if (title.isBlank()) continue
+                        val beginMs = if (beginIdx >= 0) cursor.getLong(beginIdx) else startMillis
+                        val location = if (locIdx >= 0) cursor.getString(locIdx)?.takeIf { it.isNotBlank() } else null
+                        results.add(
+                            CalendarEventItem(
+                                title = title,
+                                startTimeLabel = formatter.format(Date(beginMs)),
+                                location = location
+                            )
+                        )
+                    }
+                }
+            } catch (_: Exception) {
+            }
+            results
+        }
 }
