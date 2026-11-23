@@ -3,7 +3,7 @@
 ## 1. Project Overview
 * **App Name:** DriveLive
 * **Package / Bundle ID:** `com.nowlsantos.drivelive`
-* **In-App AI Co-Pilot:** **Michael** (Single-Orchestrator Multimodal Assistant)
+* **In-App AI Co-Pilot:** **KAI** (Knight Automotive Intelligence — Single-Orchestrator Multimodal Assistant)
 * **Primary Target:** Android (Windows PC + Android Studio development)
 * **Secondary Target:** iOS (`iosArm64`, `iosSimulatorArm64` compiled via GitHub Actions macOS runner)
 

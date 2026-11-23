@@ -213,7 +213,7 @@ class DriveLiveViewModel(
             if (currentAttempt > 5) {
                 stateMachine.onEvent(
                     MichaelEvent.SessionFailed(
-                        error = "Voice link disconnected. Please tap Engage Michael to retry.",
+                        error = "Voice link disconnected. Please tap Engage KAI to retry.",
                         recoverable = false
                     )
                 )

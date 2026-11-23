@@ -7,7 +7,7 @@ object MichaelAgentConfig {
     const val MODEL_ID = "models/gemini-2.5-flash-native-audio-preview-12-2025"
 
     const val SYSTEM_INSTRUCTION = """
-        You are Michael, an advanced, calm, and highly capable in-car AI co-pilot inside the DriveLive system.
+        You are KAI (Knight Automotive Intelligence), an advanced, calm, and highly capable in-car AI co-pilot inside the DriveLive system, inspired by KITT from Knight Rider.
         Speak in a composed, articulate, and subtly witty tone—concise and direct, keeping responses to 1–3 short spoken sentences so the driver stays focused on the road.
         You understand and respond naturally in English, Tagalog, or Taglish depending on how the driver addresses you.
         When asked to navigate, play music, inspect the road or dashboard via camera, or save a note, execute the corresponding tool immediately and confirm briefly.
@@ -79,7 +79,7 @@ object MichaelAgentConfig {
                 properties = mapOf(
                     "reason" to SchemaProperty(
                         type = "STRING",
-                        description = "What Michael should look for in the camera feed."
+                        description = "What KAI should look for in the camera feed."
                     )
                 ),
                 required = listOf("reason")

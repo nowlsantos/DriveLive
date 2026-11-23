@@ -1,18 +1,18 @@
-# DriveLive — In-Car Multimodal AI Co-Pilot ("Michael")
+# DriveLive — In-Car Multimodal AI Co-Pilot ("KAI")
 
-**DriveLive** is a Kotlin Multiplatform (KMP) and Compose Multiplatform in-car driving co-pilot for **iOS** and **Android**. Powered by the **Gemini Live Bidirectional WebSocket API (`BidiGenerateContent`)**, DriveLive gives drivers a hands-free, low-latency voice and vision assistant named **Michael**—designed with a high-contrast OLED car HUD, hardware acoustic echo cancellation, on-demand road/dashboard camera inspection, and native navigation & media integrations.
+**DriveLive** is a Kotlin Multiplatform (KMP) and Compose Multiplatform in-car driving co-pilot for **iOS** and **Android**. Powered by the **Gemini Live Bidirectional WebSocket API (`BidiGenerateContent`)**, DriveLive gives drivers a hands-free, low-latency voice and vision assistant named **KAI** (*Knight Automotive Intelligence*, inspired by KITT from *Knight Rider*)—designed with a high-contrast OLED car HUD, hardware acoustic echo cancellation, on-demand road/dashboard camera inspection, and native navigation & media integrations.
 
 ---
 
 ## Key Features
 
 * **Real-Time Bidirectional Voice (`16kHz` In / `24kHz` Out):**
-  * Full-duplex PCM audio streaming with instant **barge-in interruption** handling (immediately drains and flushes the playback buffer when the driver speaks over Michael).
+  * Full-duplex PCM audio streaming with instant **barge-in interruption** handling (immediately drains and flushes the playback buffer when the driver speaks over KAI).
   * **Hardware Acoustic Echo Cancellation (AEC) & Bluetooth Car Routing:** Uses `VOICE_COMMUNICATION` + `AcousticEchoCanceler` on Android and `AVAudioSessionModeVoiceChat` + voice processing on iOS so vehicle speakers never re-trigger the microphone.
   * Multilingual conversational fluency across **English**, **Tagalog**, and **Taglish**.
 * **On-Demand Vision Bursts (Thermal & Battery Safe):**
   * The device camera stays **OFF** by default to prevent overheating on dashboard mounts.
-  * Triggered by voice (*"Michael, read that road sign"* / *"What is this warning light?"*) or a single-tap HUD control, activating an **8-second, 1 FPS (`768x768` JPEG)** camera burst with a live picture-in-picture viewfinder overlay and countdown pill before automatically shutting down.
+  * Triggered by voice (*"KAI, read that road sign"* / *"What is this warning light?"*) or a single-tap HUD control, activating an **8-second, 1 FPS (`768x768` JPEG)** camera burst with a live picture-in-picture viewfinder overlay and countdown pill before automatically shutting down.
 * **Non-Blocking Native Tool Execution:**
   * `navigate_to`: Launches turn-by-turn directions in **Waze**, **Google Maps**, or **Apple Maps** grounded with live GPS coordinates.
   * `play_music`: Deep-links tracks, artists, and driving playlists directly into **Spotify**.
@@ -20,7 +20,7 @@
 * **Resilient Commute Sessions:**
   * Built-in **Session Resumption** (`sessionResumption` handles) with automatic exponential backoff reconnection across cellular dead zones and tower handoffs, plus sliding-window context compression (`contextWindowCompression`) for long drives.
 * **Glanceable OLED Car HUD:**
-  * True `#050505` OLED black interface with minimum `72.dp` touch targets, at most 3 primary controls on screen, and a Knight Rider-inspired 3-column crimson LED voice amplitude modulator synced to Michael's speech.
+  * True `#050505` OLED black interface with minimum `72.dp` touch targets, at most 3 primary controls on screen, and a Knight Rider-inspired crimson LED voice amplitude modulator synced to KAI's speech.
 
 ---
 
@@ -47,7 +47,7 @@ DriveLive/
 ├── androidApp/                      # Android application entry point (:androidApp)
 ├── iosApp/                          # iOS SwiftUI host project & Xcode workspace (iosApp.xcodeproj)
 ├── PROJECT_SPEC.md                  # Full technical & hardware specification
-└── AGENT_SPEC.md                    # Michael persona, voice config, and tool schemas
+└── AGENT_SPEC.md                    # KAI persona, voice config, and tool schemas
 ```
 
 ---

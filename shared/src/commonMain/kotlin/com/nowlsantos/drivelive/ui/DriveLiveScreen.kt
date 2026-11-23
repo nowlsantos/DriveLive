@@ -184,9 +184,9 @@ private fun CameraPipCard(
 private fun StatusHeader(state: MichaelSessionState) {
     val (badgeText, badgeColor) = when (state) {
         is MichaelSessionState.Idle -> "STANDBY" to TextSecondary
-        is MichaelSessionState.Connecting -> "INITIALIZING MICHAEL..." to MichaelAmber
-        is MichaelSessionState.Listening -> "MICHAEL // LISTENING" to DriverCyan
-        is MichaelSessionState.Speaking -> "MICHAEL // SPEAKING" to MichaelRed
+        is MichaelSessionState.Connecting -> "INITIALIZING KAI..." to MichaelAmber
+        is MichaelSessionState.Listening -> "KAI // LISTENING" to DriverCyan
+        is MichaelSessionState.Speaking -> "KAI // SPEAKING" to MichaelRed
         is MichaelSessionState.ExecutingTool -> "EXECUTING // ${state.toolName.uppercase()}" to MichaelAmber
         is MichaelSessionState.CameraBurst -> "OPTICAL SCAN (${state.remainingSeconds}S)" to MichaelRed
         is MichaelSessionState.Reconnecting -> "RECONNECTING (${state.attempt})..." to MichaelAmber
@@ -296,7 +296,7 @@ private fun MichaelLedEqualizer(
 @Composable
 private fun TranscriptCard(state: MichaelSessionState) {
     val displayText = when (state) {
-        is MichaelSessionState.Idle -> "Tap ENGAGE MICHAEL to start your drive."
+        is MichaelSessionState.Idle -> "Tap ENGAGE KAI to start your drive."
         is MichaelSessionState.Connecting -> "Establishing secure voice link..."
         is MichaelSessionState.Listening -> state.interimTranscript.ifBlank { "Go ahead, I'm listening." }
         is MichaelSessionState.Speaking -> state.outputTranscript.ifBlank { "..." }
@@ -380,7 +380,7 @@ private fun BottomControlBar(
             Text(
                 text = when {
                     !hasPermissions -> "GRANT MIC & LOCATION ACCESS"
-                    isInactive -> "ENGAGE MICHAEL"
+                    isInactive -> "ENGAGE KAI"
                     else -> "END DRIVE SESSION"
                 },
                 fontSize = 20.sp,

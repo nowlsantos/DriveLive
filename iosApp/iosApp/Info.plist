@@ -29,9 +29,9 @@
 
 	<!-- Privacy Usage Descriptions -->
 	<key>NSMicrophoneUsageDescription</key>
-	<string>DriveLive uses your microphone so you can talk hands-free with Michael while driving.</string>
+	<string>DriveLive uses your microphone so you can talk hands-free with KAI while driving.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>DriveLive uses your camera on demand when you ask Michael to inspect road signs, traffic, or hazards ahead.</string>
+	<string>DriveLive uses your camera on demand when you ask KAI to inspect road signs, traffic, or hazards ahead.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>DriveLive uses your location to ground navigation routes and nearby destination searches while driving.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
