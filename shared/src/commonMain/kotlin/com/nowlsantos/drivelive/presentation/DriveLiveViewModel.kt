@@ -18,7 +18,9 @@ import com.nowlsantos.drivelive.platform.RadioPlayer
 import com.nowlsantos.drivelive.state.KaiEvent
 import com.nowlsantos.drivelive.state.KaiSessionState
 import com.nowlsantos.drivelive.state.KaiStateMachine
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -58,6 +60,7 @@ class DriveLiveViewModel(
 
     private var eventCollectorJob: Job? = null
     private var micStreamJob: Job? = null
+    private var micSenderJob: Job? = null
     private var cameraBurstJob: Job? = null
     private var reconnectJob: Job? = null
     private var fatigueCheckJob: Job? = null
@@ -65,6 +68,10 @@ class DriveLiveViewModel(
     private var standbyTransitionJob: Job? = null
     private var endSessionJob: Job? = null
     private val audioPlaybackChannel = Channel<ByteArray>(capacity = 128)
+    private val micOutboundChannel = Channel<ByteArray>(
+        capacity = 24,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
 
     private var sessionStartMark: TimeMark? = null
     private var hasGreetedThisSession = false
@@ -104,7 +111,7 @@ class DriveLiveViewModel(
 
     private fun startAudioPlaybackWorker() {
         audioPlaybackJob?.cancel()
-        audioPlaybackJob = viewModelScope.launch {
+        audioPlaybackJob = viewModelScope.launch(Dispatchers.Default) {
             for (chunk in audioPlaybackChannel) {
                 audioEngine.playPcm24k(chunk)
             }
@@ -165,6 +172,9 @@ class DriveLiveViewModel(
         micStreamJob?.cancel()
         micStreamJob = null
 
+        micSenderJob?.cancel()
+        micSenderJob = null
+
         cameraBurstJob?.cancel()
         cameraBurstJob = null
 
@@ -177,6 +187,7 @@ class DriveLiveViewModel(
         pendingEndSession = false
 
         while (audioPlaybackChannel.tryReceive().isSuccess) { }
+        while (micOutboundChannel.tryReceive().isSuccess) { }
         audioEngine.stopAll()
         radioPlayer.stop()
         _radioStatus.value = RadioUiStatus()
@@ -400,11 +411,27 @@ class DriveLiveViewModel(
 
     private fun startMicrophoneStream() {
         micStreamJob?.cancel()
-        micStreamJob = viewModelScope.launch {
+        micSenderJob?.cancel()
+
+        while (micOutboundChannel.tryReceive().isSuccess) { }
+
+        micSenderJob = viewModelScope.launch(Dispatchers.Default) {
+            for (pcmChunk in micOutboundChannel) {
+                if (!hardMicMuted) {
+                    runCatching { liveClient.sendPcm16kAudio(pcmChunk) }
+                }
+            }
+        }
+
+        micStreamJob = viewModelScope.launch(Dispatchers.Default) {
+            var lastUiEmitMark = TimeSource.Monotonic.markNow()
             audioEngine.startCapture().collect { (pcmChunk, amplitude) ->
                 if (!hardMicMuted) {
-                    stateMachine.onEvent(KaiEvent.MicAudioFrame(pcmChunk, amplitude))
-                    liveClient.sendPcm16kAudio(pcmChunk)
+                    micOutboundChannel.trySend(pcmChunk)
+                    if (lastUiEmitMark.elapsedNow() >= 45.milliseconds) {
+                        lastUiEmitMark = TimeSource.Monotonic.markNow()
+                        stateMachine.onEvent(KaiEvent.MicAudioFrame(pcmChunk, amplitude))
+                    }
                 }
             }
         }
@@ -462,6 +489,7 @@ class DriveLiveViewModel(
     override fun onCleared() {
         super.onCleared()
         audioPlaybackChannel.close()
+        micOutboundChannel.close()
         endDriveSession()
         localVoiceSpeaker.shutdown()
     }

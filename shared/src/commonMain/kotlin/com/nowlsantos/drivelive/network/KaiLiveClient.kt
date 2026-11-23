@@ -11,12 +11,14 @@ import io.ktor.websocket.readBytes
 import io.ktor.websocket.readText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlin.io.encoding.Base64
@@ -59,12 +61,14 @@ class KaiLiveClient(
             val ws = httpClient.webSocketSession(urlString = endpoint)
             session = ws
 
-            val setupPayload = json.encodeToString(
-                KaiAgentConfig.buildSetupMessage(resumptionHandle)
-            )
+            val setupPayload = withContext(Dispatchers.Default) {
+                json.encodeToString(
+                    KaiAgentConfig.buildSetupMessage(resumptionHandle)
+                )
+            }
             ws.send(Frame.Text(setupPayload))
 
-            receiveJob = scope.launch {
+            receiveJob = scope.launch(Dispatchers.Default) {
                 listenToServer(ws)
             }
         } catch (e: Exception) {
@@ -180,30 +184,40 @@ class KaiLiveClient(
         val ws = session ?: return
         if (!ws.isActive) return
 
-        val payload = ClientRealtimeInputMessage(
-            realtimeInput = RealtimeInputPayload(
-                audio = BlobData(
-                    mimeType = "audio/pcm;rate=16000",
-                    data = Base64.encode(pcmBytes)
+        val encodedText = withContext(Dispatchers.Default) {
+            val payload = ClientRealtimeInputMessage(
+                realtimeInput = RealtimeInputPayload(
+                    audio = BlobData(
+                        mimeType = "audio/pcm;rate=16000",
+                        data = Base64.encode(pcmBytes)
+                    )
                 )
             )
-        )
-        ws.send(Frame.Text(json.encodeToString(payload)))
+            json.encodeToString(payload)
+        }
+        if (ws.isActive) {
+            ws.send(Frame.Text(encodedText))
+        }
     }
 
     suspend fun sendVideoJpegFrame(jpegBytes: ByteArray) {
         val ws = session ?: return
         if (!ws.isActive) return
 
-        val payload = ClientRealtimeInputMessage(
-            realtimeInput = RealtimeInputPayload(
-                video = BlobData(
-                    mimeType = "image/jpeg",
-                    data = Base64.encode(jpegBytes)
+        val encodedText = withContext(Dispatchers.Default) {
+            val payload = ClientRealtimeInputMessage(
+                realtimeInput = RealtimeInputPayload(
+                    video = BlobData(
+                        mimeType = "image/jpeg",
+                        data = Base64.encode(jpegBytes)
+                    )
                 )
             )
-        )
-        ws.send(Frame.Text(json.encodeToString(payload)))
+            json.encodeToString(payload)
+        }
+        if (ws.isActive) {
+            ws.send(Frame.Text(encodedText))
+        }
     }
 
     suspend fun sendClientTurn(text: String) {

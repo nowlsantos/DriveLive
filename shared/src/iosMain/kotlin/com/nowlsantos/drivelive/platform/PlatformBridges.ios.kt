@@ -26,6 +26,7 @@ import platform.AVFAudio.AVSpeechBoundary
 import platform.AVFAudio.AVSpeechSynthesizer
 import platform.AVFAudio.AVSpeechUtterance
 import platform.AVFAudio.setActive
+import platform.AVFAudio.setPreferredIOBufferDuration
 import platform.AVFoundation.AVCaptureVideoPreviewLayer
 import platform.AVFoundation.AVPlayer
 import platform.AVFoundation.AVPlayerItem
@@ -97,7 +98,7 @@ actual class AudioEngine actual constructor() {
 
         inputNode.installTapOnBus(
             bus = 0u,
-            bufferSize = 2048u,
+            bufferSize = 1024u,
             format = recordingFormat
         ) { buffer, _ ->
             if (buffer == null) return@installTapOnBus
@@ -229,6 +230,7 @@ actual class AudioEngine actual constructor() {
                 options = AVAudioSessionCategoryOptionAllowBluetooth or AVAudioSessionCategoryOptionDefaultToSpeaker,
                 error = null
             )
+            session.setPreferredIOBufferDuration(0.02, error = null)
             session.setActive(true, error = null)
         }
     }

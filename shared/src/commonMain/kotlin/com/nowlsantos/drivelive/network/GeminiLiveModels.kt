@@ -17,6 +17,7 @@ data class BidiGenerateContentSetup(
     val tools: List<ToolDeclaration> = emptyList(),
     val inputAudioTranscription: AudioTranscriptionConfig? = AudioTranscriptionConfig(),
     val outputAudioTranscription: AudioTranscriptionConfig? = AudioTranscriptionConfig(),
+    val realtimeInputConfig: RealtimeInputConfig? = RealtimeInputConfig(),
     val contextWindowCompression: ContextWindowCompressionConfig? = ContextWindowCompressionConfig(),
     val sessionResumption: SessionResumptionConfig? = SessionResumptionConfig()
 )
@@ -24,7 +25,27 @@ data class BidiGenerateContentSetup(
 @Serializable
 data class LiveGenerationConfig(
     val responseModalities: List<String> = listOf("AUDIO"),
-    val speechConfig: SpeechConfig = SpeechConfig()
+    val speechConfig: SpeechConfig = SpeechConfig(),
+    val thinkingConfig: ThinkingConfig? = ThinkingConfig()
+)
+
+@Serializable
+data class ThinkingConfig(
+    val thinkingBudget: Int = 0
+)
+
+@Serializable
+data class RealtimeInputConfig(
+    val automaticActivityDetection: AutomaticActivityDetection = AutomaticActivityDetection()
+)
+
+@Serializable
+data class AutomaticActivityDetection(
+    val disabled: Boolean = false,
+    val startOfSpeechSensitivity: String = "START_SENSITIVITY_HIGH",
+    val endOfSpeechSensitivity: String = "END_SENSITIVITY_HIGH",
+    val prefixPaddingMs: Int = 120,
+    val silenceDurationMs: Int = 450
 )
 
 @Serializable
