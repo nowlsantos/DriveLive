@@ -9,6 +9,8 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 import platform.AVFAudio.AVAudioEngine
 import platform.AVFAudio.AVAudioFormat
 import platform.AVFAudio.AVAudioPCMBuffer
@@ -237,52 +239,94 @@ actual class NavigationLauncher {
         destination: String,
         coordinate: GeoCoordinate?,
         preferredApp: NavigationApp
-    ): LaunchResult {
+    ): LaunchResult = suspendCancellableCoroutine { continuation ->
         val encodedDest = destination.encodeUrlComponent()
+        val hasDest = destination.isNotBlank()
         val urlCandidates = when (preferredApp) {
-            NavigationApp.WAZE -> listOf(
-                "waze://?q=$encodedDest&navigate=yes",
-                "http://maps.apple.com/?daddr=$encodedDest"
-            )
-            NavigationApp.GOOGLE_MAPS -> listOf(
-                "comgooglemaps://?daddr=$encodedDest&directionsmode=driving",
-                "http://maps.apple.com/?daddr=$encodedDest"
-            )
-            else -> listOf(
-                if (coordinate != null && destination.isBlank()) {
-                    "http://maps.apple.com/?daddr=${coordinate.latitude},${coordinate.longitude}"
-                } else {
+            NavigationApp.WAZE -> if (hasDest) {
+                listOf(
+                    "waze://?q=$encodedDest&navigate=yes",
+                    "https://waze.com/ul?q=$encodedDest&navigate=yes",
                     "http://maps.apple.com/?daddr=$encodedDest"
+                )
+            } else {
+                listOf("waze://", "https://waze.com/ul", "http://maps.apple.com/")
+            }
+            NavigationApp.GOOGLE_MAPS -> if (hasDest) {
+                listOf(
+                    "comgooglemaps://?daddr=$encodedDest&directionsmode=driving",
+                    "https://www.google.com/maps/dir/?api=1&destination=$encodedDest&travelmode=driving",
+                    "http://maps.apple.com/?daddr=$encodedDest"
+                )
+            } else {
+                listOf(
+                    "comgooglemaps://",
+                    "https://www.google.com/maps",
+                    "http://maps.apple.com/"
+                )
+            }
+            else -> listOf(
+                if (coordinate != null && !hasDest) {
+                    "http://maps.apple.com/?ll=${coordinate.latitude},${coordinate.longitude}"
+                } else if (hasDest) {
+                    "http://maps.apple.com/?daddr=$encodedDest"
+                } else {
+                    "http://maps.apple.com/"
                 }
             )
         }
 
-        for (rawUrl in urlCandidates) {
-            val nsUrl = NSURL.URLWithString(rawUrl) ?: continue
-            if (UIApplication.sharedApplication.canOpenURL(nsUrl)) {
-                UIApplication.sharedApplication.openURL(nsUrl)
-                return LaunchResult.Success
+        dispatch_async(dispatch_get_main_queue()) {
+            val app = UIApplication.sharedApplication
+            var launched = false
+            for (rawUrl in urlCandidates) {
+                val nsUrl = NSURL.URLWithString(rawUrl) ?: continue
+                if (app.canOpenURL(nsUrl)) {
+                    app.openURL(nsUrl, options = emptyMap<Any?, Any>(), completionHandler = null)
+                    launched = true
+                    break
+                }
+            }
+            if (continuation.isActive) {
+                if (launched) {
+                    continuation.resume(LaunchResult.Success)
+                } else {
+                    continuation.resume(LaunchResult.Failure("No compatible maps app available on iOS"))
+                }
             }
         }
-        return LaunchResult.Failure("No compatible maps app available on iOS")
     }
 }
 
 actual class MediaLauncher {
-    actual suspend fun openSpotifyUri(spotifyUri: String): LaunchResult {
-        val nsUrl = NSURL.URLWithString(spotifyUri)
-            ?: return LaunchResult.Failure("Invalid Spotify URI")
-        return if (UIApplication.sharedApplication.canOpenURL(nsUrl)) {
-            UIApplication.sharedApplication.openURL(nsUrl)
-            LaunchResult.Success
-        } else {
-            LaunchResult.Failure("Spotify is not installed on this iPhone")
+    actual suspend fun openSpotifyUri(spotifyUri: String): LaunchResult =
+        suspendCancellableCoroutine { continuation ->
+            dispatch_async(dispatch_get_main_queue()) {
+                val app = UIApplication.sharedApplication
+                val nsUrl = NSURL.URLWithString(spotifyUri)
+                if (nsUrl != null && app.canOpenURL(nsUrl)) {
+                    app.openURL(nsUrl, options = emptyMap<Any?, Any>(), completionHandler = null)
+                    if (continuation.isActive) continuation.resume(LaunchResult.Success)
+                } else {
+                    val webFallback = NSURL.URLWithString("https://open.spotify.com")
+                    if (webFallback != null) {
+                        app.openURL(webFallback, options = emptyMap<Any?, Any>(), completionHandler = null)
+                        if (continuation.isActive) continuation.resume(LaunchResult.Success)
+                    } else if (continuation.isActive) {
+                        continuation.resume(LaunchResult.Failure("Spotify is not installed on this iPhone"))
+                    }
+                }
+            }
         }
-    }
 
     actual suspend fun searchSpotifyFallback(query: String): LaunchResult {
-        val encoded = query.encodeUrlComponent()
-        return openSpotifyUri("spotify:search:$encoded")
+        val trimmed = query.trim()
+        return if (trimmed.isEmpty()) {
+            openSpotifyUri("spotify://")
+        } else {
+            val encoded = trimmed.encodeUrlComponent()
+            openSpotifyUri("spotify:search:$encoded")
+        }
     }
 }
 

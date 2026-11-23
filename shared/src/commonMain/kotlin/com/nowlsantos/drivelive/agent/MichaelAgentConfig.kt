@@ -38,12 +38,12 @@ object MichaelAgentConfig {
     private fun registeredTools(): List<FunctionDeclaration> = listOf(
         FunctionDeclaration(
             name = "navigate_to",
-            description = "Launch turn-by-turn navigation to a destination, landmark, gas station, or business.",
+            description = "Open Google Maps, Waze, or Apple Maps, or launch turn-by-turn navigation to a destination.",
             parameters = SchemaObject(
                 properties = mapOf(
                     "destination" to SchemaProperty(
                         type = "STRING",
-                        description = "Name, address, or search query for the destination."
+                        description = "Name, address, or search query for the destination (leave empty if user just asks to open the map app)."
                     ),
                     "preferred_app" to SchemaProperty(
                         type = "STRING",
@@ -51,17 +51,17 @@ object MichaelAgentConfig {
                         enum = listOf("GOOGLE_MAPS", "WAZE", "APPLE_MAPS", "DEFAULT")
                     )
                 ),
-                required = listOf("destination")
+                required = emptyList()
             )
         ),
         FunctionDeclaration(
             name = "play_music",
-            description = "Search and play a song, artist, album, or playlist on Spotify.",
+            description = "Open Spotify or search and play a song, artist, album, or playlist on Spotify.",
             parameters = SchemaObject(
                 properties = mapOf(
                     "query" to SchemaProperty(
                         type = "STRING",
-                        description = "Song title, artist name, genre, or mood."
+                        description = "Song title, artist name, genre, or mood (leave empty if user just asks to open Spotify)."
                     ),
                     "media_type" to SchemaProperty(
                         type = "STRING",
@@ -69,7 +69,7 @@ object MichaelAgentConfig {
                         enum = listOf("track", "artist", "album", "playlist")
                     )
                 ),
-                required = listOf("query")
+                required = emptyList()
             )
         ),
         FunctionDeclaration(

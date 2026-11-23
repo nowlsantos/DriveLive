@@ -36,17 +36,10 @@ class ToolCallDispatcher(
     }
 
     private suspend fun handleNavigateTo(args: JsonObject): JsonObject {
-        val destination = args["destination"]?.jsonPrimitive?.content.orEmpty()
+        val destination = args["destination"]?.jsonPrimitive?.content?.trim().orEmpty()
         val appRaw = args["preferred_app"]?.jsonPrimitive?.content ?: "DEFAULT"
         val preferredApp = runCatching { NavigationApp.valueOf(appRaw) }
             .getOrDefault(NavigationApp.DEFAULT)
-
-        if (destination.isBlank()) {
-            return buildJsonObject {
-                put("status", "error")
-                put("message", "Destination was empty.")
-            }
-        }
 
         val currentCoord = locationProvider.getCurrentLocation()
         val result = navigationLauncher.navigateTo(
@@ -58,7 +51,7 @@ class ToolCallDispatcher(
         return when (result) {
             is LaunchResult.Success -> buildJsonObject {
                 put("status", "launched")
-                put("destination", destination)
+                put("destination", destination.ifEmpty { "current_map" })
                 put("app", preferredApp.name)
             }
             is LaunchResult.Failure -> buildJsonObject {
@@ -69,19 +62,16 @@ class ToolCallDispatcher(
     }
 
     private suspend fun handlePlayMusic(args: JsonObject): JsonObject {
-        val query = args["query"]?.jsonPrimitive?.content.orEmpty()
-        if (query.isBlank()) {
-            return buildJsonObject {
-                put("status", "error")
-                put("message", "Music query was empty.")
-            }
+        val query = args["query"]?.jsonPrimitive?.content?.trim().orEmpty()
+        val result = if (query.isBlank() || query.equals("spotify", ignoreCase = true)) {
+            mediaLauncher.openSpotifyUri("spotify://")
+        } else {
+            mediaLauncher.searchSpotifyFallback(query)
         }
-
-        val result = mediaLauncher.searchSpotifyFallback(query)
         return when (result) {
             is LaunchResult.Success -> buildJsonObject {
-                put("status", "launched_search")
-                put("query", query)
+                put("status", "launched_spotify")
+                put("query", query.ifEmpty { "home" })
             }
             is LaunchResult.Failure -> buildJsonObject {
                 put("status", "error")
