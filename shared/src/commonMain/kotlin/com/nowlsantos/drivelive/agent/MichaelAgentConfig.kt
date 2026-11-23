@@ -4,7 +4,7 @@ import com.nowlsantos.drivelive.network.*
 
 object MichaelAgentConfig {
 
-    const val MODEL_ID = "models/gemini-3.8-live"
+    const val MODEL_ID = "models/gemini-2.5-flash-native-audio-preview-12-2025"
 
     const val SYSTEM_INSTRUCTION = """
         You are Michael, an advanced, calm, and highly capable in-car AI co-pilot inside the DriveLive system.

@@ -1,3 +1,4 @@
+import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -6,6 +7,38 @@ plugins {
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.kotlinSerialization)
+}
+
+val localProps = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) {
+        file.inputStream().use { load(it) }
+    }
+}
+val resolvedGeminiApiKey: String = (localProps.getProperty("GEMINI_API_KEY")
+    ?: System.getenv("GEMINI_API_KEY")
+    ?: "")
+    .trim()
+    .removeSurrounding("\"")
+
+val generateBuildSecrets = tasks.register("generateBuildSecrets") {
+    val outputDir = layout.buildDirectory.dir("generated/secrets/commonMain/kotlin")
+    val apiKey = resolvedGeminiApiKey
+    inputs.property("apiKey", apiKey)
+    outputs.dir(outputDir)
+    doLast {
+        val pkgDir = outputDir.get().asFile.resolve("com/nowlsantos/drivelive/config")
+        pkgDir.mkdirs()
+        pkgDir.resolve("BuildSecrets.kt").writeText(
+            """
+            package com.nowlsantos.drivelive.config
+
+            internal object BuildSecrets {
+                const val DEFAULT_GEMINI_API_KEY: String = "${apiKey.replace("\\", "\\\\").replace("\"", "\\\"")}"
+            }
+            """.trimIndent()
+        )
+    }
 }
 
 kotlin {
@@ -41,6 +74,9 @@ kotlin {
         }
     }
     sourceSets {
+        commonMain {
+            kotlin.srcDir(generateBuildSecrets.map { layout.buildDirectory.dir("generated/secrets/commonMain/kotlin") })
+        }
         commonMain.dependencies {
             implementation(compose.runtime)
             implementation(compose.foundation)

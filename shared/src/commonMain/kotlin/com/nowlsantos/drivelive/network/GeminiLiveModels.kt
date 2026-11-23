@@ -11,7 +11,7 @@ data class ClientSetupMessage(
 
 @Serializable
 data class BidiGenerateContentSetup(
-    val model: String = "models/gemini-3.8-live",
+    val model: String = "models/gemini-2.5-flash-native-audio-preview-12-2025",
     val generationConfig: LiveGenerationConfig = LiveGenerationConfig(),
     val systemInstruction: ContentPayload,
     val tools: List<ToolDeclaration> = emptyList(),
@@ -56,7 +56,7 @@ data class ContentPart(
 data class BlobData(val mimeType: String, val data: String)
 
 @Serializable
-data class AudioTranscriptionConfig(val enabled: Boolean = true)
+class AudioTranscriptionConfig
 
 @Serializable
 data class ContextWindowCompressionConfig(

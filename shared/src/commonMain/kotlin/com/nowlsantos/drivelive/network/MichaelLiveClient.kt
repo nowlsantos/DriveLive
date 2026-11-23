@@ -44,8 +44,19 @@ class MichaelLiveClient(
 
     suspend fun connect(scope: CoroutineScope, resumptionHandle: String? = latestResumptionHandle) {
         disconnect()
+        val trimmedKey = apiKey.trim()
+        if (trimmedKey.isEmpty() || trimmedKey.startsWith("$(")) {
+            _events.tryEmit(
+                MichaelEvent.SessionFailed(
+                    error = "Missing GEMINI_API_KEY. Set GEMINI_API_KEY in local.properties or Config.xcconfig.",
+                    recoverable = false
+                )
+            )
+            return
+        }
+
         val endpoint =
-            "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=$apiKey"
+            "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=$trimmedKey"
 
         try {
             val ws = httpClient.webSocketSession(urlString = endpoint)
@@ -61,9 +72,11 @@ class MichaelLiveClient(
             }
         } catch (e: Exception) {
             if (e is CancellationException) throw e
+            val closeReason = runCatching { session?.closeReason?.await()?.message }.getOrNull()
+            val detail = closeReason?.takeIf { it.isNotBlank() } ?: e.message ?: "Failed to connect to Gemini Live"
             _events.tryEmit(
                 MichaelEvent.SessionFailed(
-                    error = e.message ?: "Failed to connect to Gemini Live",
+                    error = detail,
                     recoverable = true
                 )
             )
@@ -71,8 +84,10 @@ class MichaelLiveClient(
     }
 
     private suspend fun listenToServer(ws: DefaultClientWebSocketSession) {
+        var receivedAnyFrame = false
         try {
             for (frame in ws.incoming) {
+                receivedAnyFrame = true
                 val rawText = when (frame) {
                     is Frame.Text -> frame.readText()
                     is Frame.Binary -> frame.readBytes().decodeToString()
@@ -82,10 +97,20 @@ class MichaelLiveClient(
                 val message = json.decodeFromString<ServerMessage>(rawText)
                 handleServerMessage(message)
             }
-            _events.tryEmit(MichaelEvent.ConnectionDropped(latestResumptionHandle))
+            val closeMsg = runCatching { ws.closeReason.await()?.message }.getOrNull()
+            if (!receivedAnyFrame && !closeMsg.isNullOrBlank()) {
+                _events.tryEmit(MichaelEvent.SessionFailed(error = closeMsg, recoverable = false))
+            } else {
+                _events.tryEmit(MichaelEvent.ConnectionDropped(latestResumptionHandle))
+            }
         } catch (e: Exception) {
             if (e is CancellationException) throw e
-            _events.tryEmit(MichaelEvent.ConnectionDropped(latestResumptionHandle))
+            val closeMsg = runCatching { ws.closeReason.await()?.message }.getOrNull()
+            if (!receivedAnyFrame && !closeMsg.isNullOrBlank()) {
+                _events.tryEmit(MichaelEvent.SessionFailed(error = closeMsg, recoverable = false))
+            } else {
+                _events.tryEmit(MichaelEvent.ConnectionDropped(latestResumptionHandle))
+            }
         }
     }
 

@@ -1,5 +1,6 @@
 package com.nowlsantos.drivelive.di
 
+import com.nowlsantos.drivelive.config.BuildSecrets
 import com.nowlsantos.drivelive.network.MichaelLiveClient
 import com.nowlsantos.drivelive.presentation.DriveLiveViewModel
 import com.nowlsantos.drivelive.state.MichaelStateMachine
@@ -40,9 +41,13 @@ fun commonModule(geminiApiKey: String): Module = module {
     singleOf(::MichaelStateMachine)
 
     single {
+        val resolvedKey = geminiApiKey
+            .trim()
+            .takeIf { it.isNotEmpty() && !it.startsWith("$(") }
+            ?: BuildSecrets.DEFAULT_GEMINI_API_KEY
         MichaelLiveClient(
             httpClient = get(),
-            apiKey = geminiApiKey
+            apiKey = resolvedKey
         )
     }
 
