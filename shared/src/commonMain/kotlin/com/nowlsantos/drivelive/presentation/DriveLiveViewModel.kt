@@ -179,7 +179,7 @@ class DriveLiveViewModel(
                         if (!hasGreetedThisSession) {
                             hasGreetedThisSession = true
                             liveClient.sendClientTurn(
-                                "[SYSTEM] Voice link established. Greet the driver briefly in 1 short sentence as KAI."
+                                "[SYSTEM] Voice link established. Greet the driver briefly in 1 short sentence as Kai (pronounced like sky)."
                             )
                         }
                     }
@@ -222,7 +222,7 @@ class DriveLiveViewModel(
                         if (event.recoverable) {
                             reconnectWithBackoff(null)
                         } else {
-                            localVoiceSpeaker.speak("Connection lost. Tap Engage KAI when ready to reconnect.")
+                            localVoiceSpeaker.speak("Connection lost. Tap Engage Kai when ready to reconnect.")
                             stateMachine.onEvent(event)
                         }
                     }
@@ -276,7 +276,7 @@ class DriveLiveViewModel(
         reconnectJob?.cancel()
         reconnectJob = viewModelScope.launch {
             if (currentAttempt > 5) {
-                localVoiceSpeaker.speak("Voice link disconnected. Tap Engage KAI to retry.")
+                localVoiceSpeaker.speak("Voice link disconnected. Tap Engage Kai to retry.")
                 stateMachine.onEvent(
                     KaiEvent.SessionFailed(
                         error = "Voice link disconnected. Please tap Engage KAI to retry.",
