@@ -69,7 +69,7 @@ object KaiAgentConfig {
                 properties = mapOf(
                     "query" to SchemaProperty(
                         type = "STRING",
-                        description = "Genre, mood, holiday theme, or radio station name (e.g., 'christmas', 'jazz', 'lofi', 'opm', 'pop', 'rock', 'Wish 107.5'). Leave empty for popular music."
+                        description = "Genre, mood, holiday theme, or radio station name/frequency (includes built-in Metro Manila FM presets: '90.7 Love Radio', '96.3 Easy Rock', 'Barangay LS 97.1', 'Magic 89.9', 'Monster RX 93.1', '91.5 Win Radio', plus 'christmas', 'jazz', 'lofi', 'opm', 'pop', 'rock'). Leave empty for default FM radio."
                     ),
                     "source" to SchemaProperty(
                         type = "STRING",
