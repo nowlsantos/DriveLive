@@ -1,0 +1,19 @@
+package com.nowlsantos.drivelive.di
+
+import com.nowlsantos.drivelive.platform.AudioEngine
+import com.nowlsantos.drivelive.platform.CameraFrameStreamer
+import com.nowlsantos.drivelive.platform.DisplayController
+import com.nowlsantos.drivelive.platform.LocationProvider
+import com.nowlsantos.drivelive.platform.MediaLauncher
+import com.nowlsantos.drivelive.platform.NavigationLauncher
+import org.koin.core.module.Module
+import org.koin.dsl.module
+
+actual val platformModule: Module = module {
+    single { AudioEngine() }
+    single { CameraFrameStreamer() }
+    single { NavigationLauncher() }
+    single { MediaLauncher() }
+    single { LocationProvider() }
+    single { DisplayController() }
+}
